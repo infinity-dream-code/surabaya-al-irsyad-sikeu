@@ -76,21 +76,21 @@ class DataSiswaController extends Controller
     public function getColumn()
     {
         return [
-            ["data" => null, "name" => "no", "className" => "text-center", "columnType" => "row", "exportable" => true],
-            ["data" => "nocust", "name" => "NIS", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "va_spp", "name" => "VA SPP", "searchable" => false, "orderable" => false, "exportable" => true],
-            ["data" => "va_saku", "name" => "VA Saku", "searchable" => false, "orderable" => false, "exportable" => true],
-            ["data" => "NUM2ND", "name" => "No Pendaftaran", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "nmcust", "name" => "NAMA", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "CODE02", "name" => "Unit", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "DESC02", "name" => "Kelas", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "DESC03", "name" => "Jenjang", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "DESC04", "name" => "Angkatan", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "CODE04", "name" => "Gender", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "DESC05", "name" => "Alamat", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "GENUS", "name" => "Orang Tua", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "NO_WA", "name" => "No WA", "searchable" => true, "orderable" => true, "exportable" => true],
-            ["data" => "STCUST", "name" => "Status (1/0)", "searchable" => true, "orderable" => true, "exportable" => true],
+            ["data" => null, "name" => "no", "className" => "text-center", "columnType" => "row", "exportable" => true, "duplicate" => false],
+            ["data" => "nocust", "name" => "NIS", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "va_spp", "name" => "VA SPP", "searchable" => false, "orderable" => false, "exportable" => true, "duplicate" => false],
+            ["data" => "va_saku", "name" => "VA Saku", "searchable" => false, "orderable" => false, "exportable" => true, "duplicate" => false],
+            ["data" => "NUM2ND", "name" => "No Pendaftaran", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "nmcust", "name" => "NAMA", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "CODE02", "name" => "Unit", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "DESC02", "name" => "Kelas", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "DESC03", "name" => "Jenjang", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "DESC04", "name" => "Angkatan", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "CODE04", "name" => "Gender", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "DESC05", "name" => "Alamat", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "GENUS", "name" => "Orang Tua", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "NO_WA", "name" => "No WA", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
+            ["data" => "STCUST", "name" => "Status (1/0)", "searchable" => true, "orderable" => true, "exportable" => true, "duplicate" => false],
             [
                 "data" => "edit_siswa",
                 "name" => "Edit Data",
@@ -102,6 +102,7 @@ class DataSiswaController extends Controller
                 "buttonText" => "Edit",
                 "buttonClass" => "btn btn-sm btn-info button-edit-siswa",
                 "buttonIcon" => "ri-edit-line me-2",
+                "duplicate" => false,
             ],
             [
                 "data" => "set_status",
@@ -114,6 +115,7 @@ class DataSiswaController extends Controller
                 "buttonText" => "Edit Status",
                 "buttonClass" => "btn btn-sm btn-warning button-set-status-siswa",
                 "buttonIcon" => "ri-edit-box-line me-2",
+                "duplicate" => false,
             ],
         ];
     }
