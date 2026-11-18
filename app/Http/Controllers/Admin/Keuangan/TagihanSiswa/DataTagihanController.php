@@ -376,10 +376,13 @@ class DataTagihanController extends Controller
 
         $repaired = false;
         foreach ($candidates as $item) {
-            $key = $item->CUSTID . '|' . $item->BILLCD;
+            $key = $item->CUSTID . '|' . ($item->BILLCD ?? '');
             $names = $detailMap[$key] ?? [];
             $billnmUpper = mb_strtoupper(trim((string) $item->BILLNM));
-            if ($names === [] || !in_array($billnmUpper, $names, true)) {
+
+            // Perbaiki jika BILLNM = nama akun detail, atau masih "Testing" (salah simpan lama)
+            $shouldFix = in_array($billnmUpper, $names, true) || $billnmUpper === 'TESTING';
+            if (!$shouldFix) {
                 continue;
             }
 

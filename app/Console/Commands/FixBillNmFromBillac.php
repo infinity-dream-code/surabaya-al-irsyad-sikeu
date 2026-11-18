@@ -13,6 +13,7 @@ class FixBillNmFromBillac extends Command
     protected $signature = 'sikeu:fix-billnm
                             {--nocust= : Batasi ke NIS tertentu}
                             {--dry-run : Tampilkan perubahan tanpa menyimpan}
+                            {--force : Perbaiki semua BILLNM tanpa nama bulan (pakai BILLAC)}
                             {--base=SPP : Prefix nama tagihan}';
 
     protected $description = 'Perbaiki BILLNM yang tersimpan sebagai nama akun detail (tanpa bulan) menjadi base + bulan dari BILLAC';
@@ -21,6 +22,7 @@ class FixBillNmFromBillac extends Command
     {
         $nocust = $this->option('nocust');
         $dryRun = (bool) $this->option('dry-run');
+        $force = (bool) $this->option('force');
         $base = trim((string) $this->option('base')) ?: 'SPP';
 
         $query = scctbill::query()
@@ -42,18 +44,25 @@ class FixBillNmFromBillac extends Command
                 continue;
             }
 
-            // Hanya perbaiki jika BILLNM sama dengan nama akun di detail tagihan
-            $detailNames = scctbill_detail::query()
-                ->leftJoin('u_akun', 'u_akun.KodeAkun', '=', 'scctbill_detail.KodePost')
-                ->where('scctbill_detail.CUSTID', $bill->CUSTID)
-                ->where('scctbill_detail.BILLCD', $bill->BILLCD)
-                ->pluck('u_akun.NamaAkun')
-                ->filter()
-                ->map(fn ($n) => mb_strtoupper(trim((string) $n)))
-                ->all();
+            if (!$force) {
+                // Hanya perbaiki jika BILLNM sama dengan nama akun di detail tagihan
+                $detailQuery = scctbill_detail::query()
+                    ->leftJoin('u_akun', 'u_akun.KodeAkun', '=', 'scctbill_detail.KodePost')
+                    ->where('scctbill_detail.CUSTID', $bill->CUSTID);
 
-            if ($detailNames === [] || !in_array(mb_strtoupper($billnm), $detailNames, true)) {
-                continue;
+                if (!blank($bill->BILLCD)) {
+                    $detailQuery->where('scctbill_detail.BILLCD', $bill->BILLCD);
+                }
+
+                $detailNames = $detailQuery
+                    ->pluck('u_akun.NamaAkun')
+                    ->filter()
+                    ->map(fn ($n) => mb_strtoupper(trim((string) $n)))
+                    ->all();
+
+                if ($detailNames === [] || !in_array(mb_strtoupper($billnm), $detailNames, true)) {
+                    continue;
+                }
             }
 
             $fixed = BillNamaHelper::compose($base, substr($billac, 4, 2));

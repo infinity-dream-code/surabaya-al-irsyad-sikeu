@@ -147,7 +147,7 @@ class UploadTagihanExcelController extends Controller
 
         try {
             $headingsData = (new HeadingRowImport)->toArray($file);
-            $requiredColumns = ['nis', 'nama', 'unit', 'kelas', 'kelompok', 'angkatan', 'nominal'];
+            $requiredColumns = ['nis', 'nominal'];
             if (empty($headingsData) || !isset($headingsData[0][0])) throw new \Exception ('Tidak dapat membaca judul kolom dari file. Pastikan file memiliki header yang sesuai.');
             $headings = $headingsData[0][0];
             $headings = array_map('strtolower', $headings);
