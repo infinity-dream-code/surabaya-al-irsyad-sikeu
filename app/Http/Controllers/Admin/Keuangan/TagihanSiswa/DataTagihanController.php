@@ -8,9 +8,12 @@ use App\Models\mst_sekolah;
 use App\Models\mst_tagihan;
 use App\Models\mst_thn_aka;
 use App\Models\scctbill;
+use App\Models\scctbill_detail;
 use App\Models\scctcust;
+use App\Models\u_akun;
 use App\Models\User;
 use App\Models\ValidationMessage;
+use App\Support\BillNamaHelper;
 use App\Support\CacheHandler;
 use App\Support\FilterHandler;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -327,6 +330,73 @@ class DataTagihanController extends Controller
         $applySlot($fromUrut, $tempUrut);
         $applySlot($toUrut, $fromUrut);
         $applySlot($tempUrut, $toUrut);
+    }
+
+    /**
+     * Perbaiki BILLNM yang tersimpan sebagai nama akun detail (mis. "Testing")
+     * menjadi "SPP November" dari BILLAC (YYYYMM).
+     */
+    private function repairBillNmUsingDetailName($records): void
+    {
+        if ($records->isEmpty()) {
+            return;
+        }
+
+        $candidates = $records->filter(function ($item) {
+            $billnm = trim((string) ($item->BILLNM ?? ''));
+            $billac = preg_replace('/\D/', '', (string) ($item->BILLAC ?? ''));
+
+            return $billnm !== ''
+                && strlen($billac) === 6
+                && !BillNamaHelper::containsBulan($billnm);
+        });
+
+        if ($candidates->isEmpty()) {
+            return;
+        }
+
+        $custIds = $candidates->pluck('CUSTID')->unique()->filter()->values()->all();
+        $billCds = $candidates->pluck('BILLCD')->unique()->filter()->values()->all();
+
+        if ($custIds === [] || $billCds === []) {
+            return;
+        }
+
+        $detailNames = scctbill_detail::query()
+            ->leftJoin('u_akun', 'u_akun.KodeAkun', '=', 'scctbill_detail.KodePost')
+            ->whereIn('scctbill_detail.CUSTID', $custIds)
+            ->whereIn('scctbill_detail.BILLCD', $billCds)
+            ->get(['scctbill_detail.CUSTID', 'scctbill_detail.BILLCD', 'u_akun.NamaAkun']);
+
+        $detailMap = [];
+        foreach ($detailNames as $detail) {
+            $key = $detail->CUSTID . '|' . $detail->BILLCD;
+            $detailMap[$key][] = mb_strtoupper(trim((string) $detail->NamaAkun));
+        }
+
+        $repaired = false;
+        foreach ($candidates as $item) {
+            $key = $item->CUSTID . '|' . $item->BILLCD;
+            $names = $detailMap[$key] ?? [];
+            $billnmUpper = mb_strtoupper(trim((string) $item->BILLNM));
+            if ($names === [] || !in_array($billnmUpper, $names, true)) {
+                continue;
+            }
+
+            $billac = preg_replace('/\D/', '', (string) $item->BILLAC);
+            $fixed = BillNamaHelper::compose('SPP', substr($billac, 4, 2));
+            if ($fixed === '' || strcasecmp($fixed, (string) $item->BILLNM) === 0) {
+                continue;
+            }
+
+            scctbill::where('AA', $item->AA)->update(['BILLNM' => $fixed]);
+            $item->BILLNM = $fixed;
+            $repaired = true;
+        }
+
+        if ($repaired) {
+            Cache::increment(Str::slug($this->cacheKey) . '_cache_version');
+        }
     }
 
     public function cetak(Request $request)
@@ -697,6 +767,7 @@ class DataTagihanController extends Controller
             'scctbill.AA',
             'scctbill.BILLNM',
             'scctbill.BILLAC',
+            'scctbill.BILLCD',
             'scctbill.BILLAM',
             'scctbill.PAIDST',
             'scctbill.PAIDDT',
@@ -788,7 +859,11 @@ class DataTagihanController extends Controller
         $records = $recordsQuery
             ->skip($start)
             ->take($rowperpage)
-            ->get()
+            ->get();
+
+        $this->repairBillNmUsingDetailName($records);
+
+        $records = $records
             ->map(function ($item, $index) {
                 $row = $item->toArray();
                 $get = static fn (string $key) => $row[$key] ?? $row[strtolower($key)] ?? null;

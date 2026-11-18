@@ -11,6 +11,7 @@ use App\Models\scctbill;
 use App\Models\scctbill_detail;
 use App\Models\scctcust;
 use App\Models\ValidationMessage;
+use App\Support\BillNamaHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -298,10 +299,9 @@ class BuatTagihanController extends Controller
 
         // BILLNM = Nama Tagihan (+ bulan), mis. "SPP November"
         // Detail akun (mis. "Testing") tetap di scctbill_detail.KodePost
-        $billNm = $this->composeBillNm(
-            (string) $request->nama_tagihan,
-            $request->input('bulan') ?: substr((string) $request->fungsi, 4, 2)
-        );
+        $bulanKode = $request->input('bulan') ?: substr((string) $request->fungsi, 4, 2);
+        $baseNama = $this->resolveBillNmBase($request);
+        $billNm = BillNamaHelper::compose($baseNama, $bulanKode);
         if ($billNm === '') {
             return response()->json(['message' => 'Nama tagihan wajib diisi'], 422);
         }
@@ -398,42 +398,22 @@ class BuatTagihanController extends Controller
     }
 
     /**
-     * Susun BILLNM: "SPP" + bulan → "SPP November". Tidak dobel jika bulan sudah ada di nama.
+     * Base BILLNM: pakai Nama Tagihan. Jika yang dipilih ternyata nama akun detail → pakai SPP.
      */
-    private function composeBillNm(string $namaTagihan, ?string $bulanKode): string
+    private function resolveBillNmBase(Request $request): string
     {
-        $nama = trim($namaTagihan);
-        if ($nama === '') {
-            return '';
+        $nama = trim((string) $request->input('nama_tagihan', ''));
+        $detailNames = collect($request->input('tagihan', []))
+            ->map(fn ($item) => trim((string) (($item['nama_akun'] ?? ''))))
+            ->filter()
+            ->map(fn ($n) => mb_strtoupper($n))
+            ->unique()
+            ->all();
+
+        if ($nama !== '' && !in_array(mb_strtoupper($nama), $detailNames, true)) {
+            return u_akun::where('NamaAkun', $nama)->value('NamaAkun') ?? $nama;
         }
 
-        $bulanMap = [
-            '01' => 'Januari',
-            '02' => 'Februari',
-            '03' => 'Maret',
-            '04' => 'April',
-            '05' => 'Mei',
-            '06' => 'Juni',
-            '07' => 'Juli',
-            '08' => 'Agustus',
-            '09' => 'September',
-            '10' => 'Oktober',
-            '11' => 'November',
-            '12' => 'Desember',
-        ];
-
-        $kode = str_pad(preg_replace('/\D/', '', (string) $bulanKode), 2, '0', STR_PAD_LEFT);
-        $bulanNama = $bulanMap[$kode] ?? null;
-        if (!$bulanNama) {
-            return $nama;
-        }
-
-        foreach ($bulanMap as $label) {
-            if (stripos($nama, $label) !== false) {
-                return $nama;
-            }
-        }
-
-        return trim($nama . ' ' . $bulanNama);
+        return 'SPP';
     }
 }
