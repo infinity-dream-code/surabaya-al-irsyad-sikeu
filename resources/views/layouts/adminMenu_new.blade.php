@@ -140,83 +140,8 @@
             </ul>
         </li>
 
-            <li class="menu-item {{ Request::is([
-            'admin/data-tagihan',
-            'admin/data-penerimaan',
-            'admin/rekap-tagihan',
-            'admin/rekap-penerimaan',
-            'admin/rekap-penerimaan-harian',
-            'admin/rekap-cek-pelunasan',
-            'admin/rekap-saldo',
-            'admin/rekap-saldo/*',
-            'admin/rekap-saldo-saku',
-            'admin/rekap-saldo-saku/*',
-            'admin/cek-pelunasan',
-            'admin/potongan-tagihan*',
-        ]) ? 'active open' : '' }}">
-            <a href="javascript:void(0);" class="menu-link menu-toggle">
-                <i class="menu-icon ri ri-file-chart-line"></i>
-                <div data-i18n="Laporan">Laporan</div>
-            </a>
-            <ul class="menu-sub">
-                <li class="menu-item {{ Request::is('admin/data-tagihan') ? 'active' : '' }}">
-                    <a href="{{route('admin.data-tagihan.index')}}" class="menu-link">
-                        <div data-i18n="Data Tagihan">Data Tagihan</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/data-penerimaan') ? 'active' : '' }}">
-                    <a href="{{route('admin.data-penerimaan.index')}}" class="menu-link">
-                        <div data-i18n="Data Penerimaan">Data Penerimaan</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/rekap-tagihan') ? 'active' : '' }}">
-                    <a href="{{route('admin.rekap-tagihan.index')}}" class="menu-link">
-                        <div data-i18n="Rekap Tagihan">Rekap Tagihan</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/rekap-penerimaan') ? 'active' : '' }}">
-                    <a href="{{route('admin.rekap-penerimaan.index')}}" class="menu-link">
-                        <div data-i18n="Rekap Penerimaan">Rekap Penerimaan</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/rekap-penerimaan-harian') ? 'active' : '' }}">
-                    <a href="{{route('admin.rekap-penerimaan-harian.index')}}" class="menu-link">
-                        <div data-i18n="Rekap Penerimaan Harian">Rekap Penerimaan Harian</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/cek-pelunasan') ? 'active' : '' }}">
-                    <a href="{{route('admin.cek-pelunasan.index')}}" class="menu-link">
-                        <div data-i18n="Cek Pelunasan">Cek Pelunasan</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/rekap-cek-pelunasan') ? 'active' : '' }}">
-                    <a href="{{route('admin.rekap-cek-pelunasan.index')}}" class="menu-link">
-                        <div data-i18n="Rekap Cek Pelunasan">Rekap Cek Pelunasan</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/rekap-saldo') || Request::is('admin/rekap-saldo/*') ? 'active' : '' }}">
-                    <a href="{{route('admin.rekap-saldo.index')}}" class="menu-link">
-                        <div data-i18n="Rekap Saldo VA">Rekap Saldo VA</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is('admin/rekap-saldo-saku') || Request::is('admin/rekap-saldo-saku/*') ? 'active' : '' }}">
-                    <a href="{{route('admin.rekap-saldo-saku.index')}}" class="menu-link">
-                        <div data-i18n="Rekap Saldo Saku">Rekap Saldo Saku</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is(['admin/potongan-tagihan', 'admin/potongan-tagihan/*']) && !Request::is(['admin/potongan-tagihan/create']) ? 'active' : '' }}">
-                    <a href="{{route('admin.potongan-tagihan.index')}}" class="menu-link">
-                        <div data-i18n="Data Potongan Tagihan">Data Potongan Tagihan</div>
-                    </a>
-                </li>
-                <li class="menu-item {{ Request::is(['admin/potongan-tagihan/create']) ? 'active' : '' }}">
-                    <a href="{{route('admin.potongan-tagihan.create')}}" class="menu-link">
-                        <div data-i18n="Buat Potongan Tagihan">Buat Potongan Tagihan</div>
-                    </a>
-                </li>
-            </ul>
-        </li>
-        
+        {{-- Hidden for Al Irsyad Surabaya: Laporan --}}
+
         <li class="menu-item {{ Request::is(['admin/manual-input*']) ? 'active open' : '' }}">
             <a href="javascript:void(0);" class="menu-link menu-toggle">
                 <i class="menu-icon ri ri-edit-2-line"></i>
