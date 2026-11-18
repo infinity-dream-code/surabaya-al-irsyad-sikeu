@@ -296,11 +296,14 @@ class BuatTagihanController extends Controller
         if ($tagihans->isEmpty()) return response()->json(['message' => 'Tagihan tidak ditemukan 1'], 422);
         if (count($request->input('tagihan')) != $tagihans->count()) return response()->json(['message' => 'Jumlah tagihan yang dipilih tidak sesuai dengan jumlah data, silahkan muat ulang halaman!'], 422);
 
-        $billNm = trim((string) $request->nama_tagihan);
-        if (!u_akun::where('NamaAkun', $billNm)->exists()) {
-            return response()->json([
-                'message' => 'Nama tagihan "' . $billNm . '" tidak ditemukan di daftar akun (u_akun).',
-            ], 422);
+        // BILLNM = Nama Tagihan (+ bulan), mis. "SPP November"
+        // Detail akun (mis. "Testing") tetap di scctbill_detail.KodePost
+        $billNm = $this->composeBillNm(
+            (string) $request->nama_tagihan,
+            $request->input('bulan') ?: substr((string) $request->fungsi, 4, 2)
+        );
+        if ($billNm === '') {
+            return response()->json(['message' => 'Nama tagihan wajib diisi'], 422);
         }
 
         try {
@@ -382,35 +385,55 @@ class BuatTagihanController extends Controller
     }
 
     /**
-     * Isi nama tagihan dari dropdown, atau dari baris master harga / kode akun yang dipilih.
+     * Nama tagihan dari dropdown saja — jangan pakai nama akun detail sebagai BILLNM.
      */
     private function resolveNamaTagihan(Request $request): ?string
     {
         $nama = trim((string) $request->input('nama_tagihan', ''));
-        if ($nama !== '') {
-            return u_akun::where('NamaAkun', $nama)->value('NamaAkun') ?? $nama;
-        }
-
-        $items = $request->input('tagihan', []);
-        if (!is_array($items) || $items === []) {
+        if ($nama === '') {
             return null;
         }
 
-        $first = reset($items);
-        if (!is_array($first)) {
-            return null;
+        return u_akun::where('NamaAkun', $nama)->value('NamaAkun') ?? $nama;
+    }
+
+    /**
+     * Susun BILLNM: "SPP" + bulan → "SPP November". Tidak dobel jika bulan sudah ada di nama.
+     */
+    private function composeBillNm(string $namaTagihan, ?string $bulanKode): string
+    {
+        $nama = trim($namaTagihan);
+        if ($nama === '') {
+            return '';
         }
 
-        $namaAkun = trim((string) ($first['nama_akun'] ?? ''));
-        if ($namaAkun !== '') {
-            return u_akun::where('NamaAkun', $namaAkun)->value('NamaAkun') ?? $namaAkun;
+        $bulanMap = [
+            '01' => 'Januari',
+            '02' => 'Februari',
+            '03' => 'Maret',
+            '04' => 'April',
+            '05' => 'Mei',
+            '06' => 'Juni',
+            '07' => 'Juli',
+            '08' => 'Agustus',
+            '09' => 'September',
+            '10' => 'Oktober',
+            '11' => 'November',
+            '12' => 'Desember',
+        ];
+
+        $kode = str_pad(preg_replace('/\D/', '', (string) $bulanKode), 2, '0', STR_PAD_LEFT);
+        $bulanNama = $bulanMap[$kode] ?? null;
+        if (!$bulanNama) {
+            return $nama;
         }
 
-        $kodeAkun = $first['tagihan'] ?? null;
-        if ($kodeAkun === null || $kodeAkun === '') {
-            return null;
+        foreach ($bulanMap as $label) {
+            if (stripos($nama, $label) !== false) {
+                return $nama;
+            }
         }
 
-        return u_akun::where('KodeAkun', $kodeAkun)->value('NamaAkun');
+        return trim($nama . ' ' . $bulanNama);
     }
 }

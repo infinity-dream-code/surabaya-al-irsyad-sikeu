@@ -606,6 +606,16 @@
 
             createForm.on('submit', function (e) {
                 e.preventDefault();
+
+                if (!$('#nama_tagihan').val()) {
+                    errorAlert('Nama Tagihan wajib dipilih (contoh: SPP). Detail akun dipilih di tabel bawah.');
+                    return;
+                }
+                if (!$('#bulan').val() || !$('#fungsi').val()) {
+                    errorAlert('Bulan wajib dipilih agar Nama Tagihan tersusun (contoh: SPP November).');
+                    return;
+                }
+
                 loadingAlert();
 
                 let url = '{{route('admin.keuangan.tagihan-siswa.buat-tagihan.store')}}';
@@ -624,7 +634,6 @@
                     }
                 });
 
-                let firstNamaAkun = null;
                 selectedTagihanRows.every(function () {
                     let row = this.node();
                     let checkbox = $(row).find('.checkbox-tagihan');
@@ -636,25 +645,16 @@
                         let nominalVal = encodeURIComponent(nominalInput.val());
                         let namaAkun = encodeURIComponent(rowData?.nama_akun || '');
 
-                        if (!firstNamaAkun && rowData?.nama_akun) {
-                            firstNamaAkun = rowData.nama_akun;
-                        }
-
+                        // nama_akun = detail tagihan (KodePost), jangan timpa Nama Tagihan
                         data += `&tagihan[${checkVal}][tagihan]=` + checkVal;
                         data += `&tagihan[${checkVal}][nominal]=` + nominalVal;
                         data += `&tagihan[${checkVal}][nama_akun]=` + namaAkun;
                     }
                 });
 
-                if (!$('#nama_tagihan').val() && firstNamaAkun) {
-                    syncNamaTagihanFromAkun(firstNamaAkun);
-                }
-                if ($('#nama_tagihan').val()) {
-                    data += '&nama_tagihan=' + encodeURIComponent($('#nama_tagihan').val());
-                }
-                if ($('#fungsi').val()) {
-                    data += '&fungsi=' + encodeURIComponent($('#fungsi').val());
-                }
+                data += '&nama_tagihan=' + encodeURIComponent($('#nama_tagihan').val());
+                data += '&bulan=' + encodeURIComponent($('#bulan').val());
+                data += '&fungsi=' + encodeURIComponent($('#fungsi').val());
 
                 data += "&_token=" + csrfToken;
 
@@ -733,9 +733,7 @@
                     $('#table-post tbody .checkbox-tagihan').not(this).prop('checked', false);
                     $('#table-post tbody tr').not(row).find('input.form-control')
                         .prop('readonly', true).prop('required', false);
-                    if (rowData?.nama_akun) {
-                        syncNamaTagihanFromAkun(rowData.nama_akun);
-                    }
+                    // Nama akun di tabel = detail tagihan, bukan Nama Tagihan (BILLNM)
                 }
 
                 row.find('input.form-control').prop('readonly', !isChecked);
