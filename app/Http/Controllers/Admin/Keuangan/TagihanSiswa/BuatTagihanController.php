@@ -292,12 +292,18 @@ class BuatTagihanController extends Controller
                         ->orWhere('u_daftar_harga.kode_prod', '=', '');
                 });
             })->select('u_daftar_harga.KodeAkun', 'u_akun.NamaAkun')
-            ->get();
+            ->get()
+            ->unique(fn ($row) => (string) $row->KodeAkun)
+            ->values();
 
-        if ($tagihans->isEmpty()) return response()->json(['message' => 'Tagihan tidak ditemukan 1'], 422);
-        if (count($request->input('tagihan')) != $tagihans->count()) return response()->json(['message' => 'Jumlah tagihan yang dipilih tidak sesuai dengan jumlah data, silahkan muat ulang halaman!'], 422);
+        if ($tagihans->isEmpty()) {
+            return response()->json(['message' => 'Tagihan tidak ditemukan di master harga untuk angkatan/kelas ini'], 422);
+        }
+        if (count($request->input('tagihan')) != $tagihans->count()) {
+            return response()->json(['message' => 'Jumlah tagihan yang dipilih tidak sesuai dengan jumlah data, silahkan muat ulang halaman!'], 422);
+        }
 
-        // BILLNM = Nama Tagihan (+ bulan), mis. "SPP November"
+        // BILLNM = Nama Tagihan (+ bulan), mis. "SPP Januari"
         // Detail akun (mis. "Testing") tetap di scctbill_detail.KodePost
         $bulanKode = $request->input('bulan') ?: substr((string) $request->fungsi, 4, 2);
         $baseNama = $this->resolveBillNmBase($request);
@@ -306,81 +312,97 @@ class BuatTagihanController extends Controller
             return response()->json(['message' => 'Nama tagihan wajib diisi'], 422);
         }
 
+        $db = DB::connection('DATA_MYSQL');
+
         try {
-            DB::beginTransaction();
+            $db->beginTransaction();
 
             $siswas = scctcust::whereIn('CUSTID', $request->input('siswa'))->get();
-            if ($siswas->isEmpty()) return response()->json(['message' => 'Siswa tidak ditemukan'], 422);
-            if (count($request->input('siswa')) != $siswas->count()) return response()->json(['message' => 'Jumlah siswa yang dipilih tidak sesuai dengan jumlah data, silahkan muat ulang halaman!'], 422);
-
+            if ($siswas->isEmpty()) {
+                $db->rollBack();
+                return response()->json(['message' => 'Siswa tidak ditemukan'], 422);
+            }
+            if (count($request->input('siswa')) != $siswas->count()) {
+                $db->rollBack();
+                return response()->json(['message' => 'Jumlah siswa yang dipilih tidak sesuai dengan jumlah data, silahkan muat ulang halaman!'], 422);
+            }
 
             foreach ($siswas as $siswa) {
                 $tagihanSiswaTerbaru = scctbill::where('CUSTID', $siswa->CUSTID)
                     ->select('CUSTID', 'FUrutan', 'BILLAC', 'BILLCD')
-                    ->orderBy('FUrutan', 'DESC')
+                    ->orderByRaw('CAST(COALESCE(FUrutan, 0) AS SIGNED) DESC')
                     ->first();
 
-                $urut = $tagihanSiswaTerbaru ? $tagihanSiswaTerbaru['FUrutan'] + 1 : 1;
+                $urut = $tagihanSiswaTerbaru ? ((int) $tagihanSiswaTerbaru->FUrutan + 1) : 1;
                 $billCD = date('Y') . '/i' . date('m') . '-' . ($urut + 1);
 
                 foreach ($request->input('tagihan') as $item) {
-                    $nominal = (int) str_replace(['.', ','], '', (string) $item['nominal']);
+                    $nominal = (int) str_replace(['.', ','], '', (string) ($item['nominal'] ?? ''));
                     if ($nominal <= 0) {
+                        $db->rollBack();
                         return response()->json(['message' => 'Nominal tidak boleh kosong'], 422);
                     }
 
-                    $post = $tagihans->firstWhere('KodeAkun', $item['tagihan']);
-                    if (!$post) return response()->json(['message' => 'Post tidak ditemukan'], 422);
+                    $kodePost = (string) ($item['tagihan'] ?? '');
+                    $post = $tagihans->first(fn ($row) => (string) $row->KodeAkun === $kodePost);
+                    if (!$post) {
+                        $db->rollBack();
+                        return response()->json(['message' => 'Post tidak ditemukan'], 422);
+                    }
 
-                    $tahun = substr($request->fungsi, 0, 4);
-                    $bulan = substr($request->fungsi, 4, 2);
+                    $tahun = substr((string) $request->fungsi, 0, 4);
+                    $bulan = substr((string) $request->fungsi, 4, 2);
 
-                    // scctbill PK = AA dengan $incrementing=false → firstOrCreate/increment
-                    // tidak dapat AA, jadi UPDATE BILLAM gagal diam-diam (tetap 0).
-                    $billKeys = [
-                        'CUSTID' => $siswa->CUSTID,
-                        'BILLAC' => $request->fungsi,
-                        'BILLCD' => $billCD,
-                        'BILLNM' => $billNm,
-                    ];
+                    // Cari bill yang sama (CUSTID+BILLAC+BILLCD+BILLNM); jangan andalkan AA dari create
+                    // karena model scctbill $incrementing=false.
+                    $bill = scctbill::where('CUSTID', $siswa->CUSTID)
+                        ->where('BILLAC', $request->fungsi)
+                        ->where('BILLCD', $billCD)
+                        ->where('BILLNM', $billNm)
+                        ->first();
 
-                    $bill = scctbill::where($billKeys)->first();
                     if ($bill) {
                         scctbill::where('AA', $bill->AA)->update([
                             'BILLAM' => (int) $bill->BILLAM + $nominal,
                         ]);
-                        $bill->BILLAM = (int) $bill->BILLAM + $nominal;
                     } else {
-                        scctbill::create(array_merge($billKeys, [
+                        scctbill::create([
+                            'CUSTID' => $siswa->CUSTID,
+                            'BILLAC' => $request->fungsi,
+                            'BILLCD' => $billCD,
+                            'BILLNM' => $billNm,
                             'BILLAM' => $nominal,
                             'PAIDST' => 0,
                             'FUrutan' => $urut,
-                            'FTGLTagihan' => now(),
+                            'FTGLTagihan' => now()->format('Y-m-d H:i:s'),
                             'FSTSBolehBayar' => 1,
                             'BTA' => $tahun_pelajaran_bta,
-                        ]));
-                        $bill = scctbill::where($billKeys)->first();
-                        if (!$bill) {
-                            throw new \RuntimeException('Gagal menyimpan tagihan (scctbill).');
-                        }
+                        ]);
                     }
 
                     scctbill_detail::create([
                         'KodePost' => $post->KodeAkun,
-                        'CUSTID' => $bill->CUSTID,
+                        'CUSTID' => $siswa->CUSTID,
                         'BILLAM' => $nominal,
                         'tahun' => $tahun,
                         'periode' => $bulan,
-                        'BILLCD' => $bill->BILLCD,
+                        'BILLCD' => $billCD,
                     ]);
                 }
             }
-            DB::commit();
+            $db->commit();
             return response()->json(['message' => 'Tagihan telah dibuat']);
         } catch (\Throwable $e) {
-            DB::rollBack();
-            Log::error('Error: ' . $e->getMessage(), ['exception' => $e]);
-            return response()->json(['message' => 'Data gagal dibuat', 'error' => $e], 422);
+            $db->rollBack();
+            Log::error('BuatTagihan store failed: ' . $e->getMessage(), [
+                'exception' => $e,
+                'billNm' => $billNm ?? null,
+                'fungsi' => $request->fungsi,
+            ]);
+            return response()->json([
+                'message' => 'Data gagal dibuat: ' . $e->getMessage(),
+                'error' => $e->getMessage(),
+            ], 422);
         }
     }
 

@@ -537,7 +537,7 @@
                             <div class="input-group input-tagihan">
                                 <span class="input-group-text bg-body">Rp</span>
                                 <input type="text" class="form-control bg-body rounded-end nominal-input formattedNumber"
-                                    id="tagihan[${row.kode_akun}][nominal]" name="tagihan[${row.kode_akun}][nominal]" autocomplete="off" placeholder="Nominal Tagihan" value="${val}" readonly>
+                                    id="tagihan_${row.kode_akun}_nominal" autocomplete="off" placeholder="Nominal Tagihan" value="${val}" readonly>
                                 <div class="invalid-feedback" role="alert"></div>
                             </div>
                             `;
@@ -593,25 +593,24 @@
                     return;
                 }
 
-                loadingAlert();
-
                 let url = '{{route('admin.keuangan.tagihan-siswa.buat-tagihan.store')}}';
                 let tipe = 'POST';
                 const formId = createForm.attr('id');
                 let data = createForm.serialize();
-                let selectedRows = tableSiswa.rows({selected: true});
-                let selectedTagihanRows = tablePost.rows({selected: true});
 
-                selectedRows.every(function () {
+                // Pakai checkbox (bukan hanya DataTables selected) agar tidak kelewat
+                let siswaCount = 0;
+                tableSiswa.rows().every(function () {
                     let row = this.node();
                     let checkbox = $(row).find('.checkbox-siswa');
-
                     if (checkbox.is(':checked')) {
                         data += '&siswa[]=' + encodeURIComponent(checkbox.val());
+                        siswaCount++;
                     }
                 });
 
-                selectedTagihanRows.every(function () {
+                let tagihanCount = 0;
+                tablePost.rows().every(function () {
                     let row = this.node();
                     let checkbox = $(row).find('.checkbox-tagihan');
                     let rowData = tablePost.row(row).data();
@@ -619,21 +618,32 @@
                     if (checkbox.is(':checked')) {
                         let checkVal = encodeURIComponent(checkbox.val());
                         let nominalInput = $(row).find('.nominal-input');
-                        let nominalVal = encodeURIComponent(nominalInput.val());
+                        let nominalVal = encodeURIComponent(String(nominalInput.val() || '').trim());
                         let namaAkun = encodeURIComponent(rowData?.nama_akun || '');
 
                         // nama_akun = detail tagihan (KodePost), jangan timpa Nama Tagihan
                         data += `&tagihan[${checkVal}][tagihan]=` + checkVal;
                         data += `&tagihan[${checkVal}][nominal]=` + nominalVal;
                         data += `&tagihan[${checkVal}][nama_akun]=` + namaAkun;
+                        tagihanCount++;
                     }
                 });
+
+                if (siswaCount === 0) {
+                    errorAlert('Pilih minimal satu siswa');
+                    return;
+                }
+                if (tagihanCount === 0) {
+                    errorAlert('Pilih akun/tagihan di tabel bawah');
+                    return;
+                }
 
                 data += '&nama_tagihan=' + encodeURIComponent($('#nama_tagihan').val());
                 data += '&bulan=' + encodeURIComponent($('#bulan').val());
                 data += '&fungsi=' + encodeURIComponent($('#fungsi').val());
-
                 data += "&_token=" + csrfToken;
+
+                loadingAlert();
 
                 let ajaxOptions = {
                     url: url,
@@ -650,15 +660,15 @@
                     successAlert(responses.message);
                 }).fail(function (xhr) {
                     if (xhr.status === 422) {
-                        const errors = JSON.parse(xhr.responseText).error
-                        const errMessage = xhr.responseJSON.message
+                        const errMessage = xhr.responseJSON?.message || 'Data gagal dibuat';
                         errorAlert(errMessage);
-                        if (errors) {
+                        const errors = xhr.responseJSON?.errors || xhr.responseJSON?.error;
+                        if (errors && typeof errors === 'object' && !Array.isArray(errors) && typeof errors !== 'string') {
                             for (const [key, value] of Object.entries(errors)) {
-                                console.log(key + ': ', value[0]);
+                                const msg = Array.isArray(value) ? value[0] : value;
                                 const field = $(`[name="${key}"]`);
                                 field.addClass('is-invalid');
-                                field.next('.invalid-feedback').html(value[0]);
+                                field.next('.invalid-feedback').html(msg);
                             }
                         }
                     } else if (xhr.status === 419) {
