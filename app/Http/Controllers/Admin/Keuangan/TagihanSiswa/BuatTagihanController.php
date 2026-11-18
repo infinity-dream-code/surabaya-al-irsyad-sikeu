@@ -321,8 +321,8 @@ class BuatTagihanController extends Controller
                 $billCD = date('Y') . '/i' . date('m') . '-' . ($urut + 1);
 
                 foreach ($request->input('tagihan') as $item) {
-                    $nominal = str_replace('.', '', $item['nominal']);
-                    if (!is_numeric($nominal)) {
+                    $nominal = (int) str_replace(['.', ','], '', (string) $item['nominal']);
+                    if ($nominal <= 0) {
                         return response()->json(['message' => 'Nominal tidak boleh kosong'], 422);
                     }
 
@@ -332,26 +332,40 @@ class BuatTagihanController extends Controller
                     $tahun = substr($request->fungsi, 0, 4);
                     $bulan = substr($request->fungsi, 4, 2);
 
-                    $bill = scctbill::firstOrCreate([
+                    // scctbill PK = AA dengan $incrementing=false → firstOrCreate/increment
+                    // tidak dapat AA, jadi UPDATE BILLAM gagal diam-diam (tetap 0).
+                    $billKeys = [
                         'CUSTID' => $siswa->CUSTID,
                         'BILLAC' => $request->fungsi,
                         'BILLCD' => $billCD,
                         'BILLNM' => $billNm,
-                    ], [
-                        'BILLAM' => 0,
-                        'PAIDST' => 0,
-                        'FUrutan' => $urut,
-                        'FTGLTagihan' => now(),
-                        'FSTSBolehBayar' => 1,
-                        'BTA' => $tahun_pelajaran_bta,
-                    ]);
+                    ];
 
-                    $bill->increment('BILLAM', (int) $nominal);
+                    $bill = scctbill::where($billKeys)->first();
+                    if ($bill) {
+                        scctbill::where('AA', $bill->AA)->update([
+                            'BILLAM' => (int) $bill->BILLAM + $nominal,
+                        ]);
+                        $bill->BILLAM = (int) $bill->BILLAM + $nominal;
+                    } else {
+                        scctbill::create(array_merge($billKeys, [
+                            'BILLAM' => $nominal,
+                            'PAIDST' => 0,
+                            'FUrutan' => $urut,
+                            'FTGLTagihan' => now(),
+                            'FSTSBolehBayar' => 1,
+                            'BTA' => $tahun_pelajaran_bta,
+                        ]));
+                        $bill = scctbill::where($billKeys)->first();
+                        if (!$bill) {
+                            throw new \RuntimeException('Gagal menyimpan tagihan (scctbill).');
+                        }
+                    }
 
                     scctbill_detail::create([
                         'KodePost' => $post->KodeAkun,
                         'CUSTID' => $bill->CUSTID,
-                        'BILLAM' => (int) $nominal,
+                        'BILLAM' => $nominal,
                         'tahun' => $tahun,
                         'periode' => $bulan,
                         'BILLCD' => $bill->BILLCD,
