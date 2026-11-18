@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin\MasterData;
 use App\Http\Controllers\Controller;
 use App\Imports\MasterData\ImportDataSiswa;
 use App\Models\mst_kelas;
-use App\Models\mst_sekolah;
 use App\Models\mst_thn_aka;
 use App\Models\scctcust;
 use App\Models\ValidationMessage;
@@ -234,9 +233,8 @@ class ExportImportDataController extends Controller
 
                     $thn_aka = mst_thn_aka::where('thn_aka', $item['angkatan'])->first();
                     $kelas = mst_kelas::findForImport($item['unit'], $item['kelas'], $item['kelompok']);
-                    $unit = $this->resolveSekolahForImport($item['unit'], $kelas);
 
-                    if (!$thn_aka || !$kelas || !$unit) {
+                    if (!$thn_aka || !$kelas) {
                         Log::warning('export_import_data.validateData.missing_reference', [
                             'nis' => $item['nis'] ?? null,
                             'nodaftar' => $item['nodaftar'] ?? null,
@@ -246,14 +244,12 @@ class ExportImportDataController extends Controller
                             'kelompok' => $item['kelompok'] ?? null,
                             'thn_aka_found' => (bool) $thn_aka,
                             'kelas_found' => (bool) $kelas,
-                            'sekolah_found' => (bool) $unit,
                         ]);
 
-                        return response()->json(['message' => 'Silahkan periksa kembali kelas/sekolah/thn_aka siswa. Sekolah harus ada di mst_sekolah terlebih dahulu.',
+                        return response()->json([
+                            'message' => 'Silahkan periksa kembali kelas/thn_aka siswa (acuan unit/kelas/kelompok dari Master Kelas).',
                             'thn_aka' => $thn_aka,
-                            'unit' => $unit,
-                            'kelas' => $kelas
-
+                            'kelas' => $kelas,
                         ], 422);
                     }
 
@@ -274,11 +270,10 @@ class ExportImportDataController extends Controller
                             }
                         }
 
-                        scctcust::create($this->buildScctcustPayload($item, $unit, $kelas, $thn_aka));
+                        scctcust::create($this->buildScctcustPayload($item, $kelas, $thn_aka));
                     } else {
                         $existingCust->update($this->buildScctcustPayload(
                             $item,
-                            $unit,
                             $kelas,
                             $thn_aka,
                             $request->metode == '2',
@@ -392,58 +387,23 @@ class ExportImportDataController extends Controller
         return $second !== '' ? $second : null;
     }
 
-    private function resolveSekolahForImport(?string $unit, ?mst_kelas $kelas): ?mst_sekolah
-    {
-        $unit = trim((string) $unit);
-
-        if ($unit !== '') {
-            $byUnit = mst_sekolah::query()
-                ->where(function ($query) use ($unit) {
-                    $query->where('DESC01', 'like', '%' . $unit . '%')
-                        ->orWhere('CODE01', $unit)
-                        ->orWhereRaw('UPPER(TRIM(DESC01)) = ?', [strtoupper($unit)]);
-                })
-                ->first();
-
-            if ($byUnit) {
-                return $byUnit;
-            }
-        }
-
-        if (!$kelas) {
-            return null;
-        }
-
-        $kelasUnit = trim((string) ($kelas->unit ?? ''));
-        if ($kelasUnit === '') {
-            return null;
-        }
-
-        return mst_sekolah::query()
-            ->where(function ($query) use ($kelasUnit) {
-                $query->where('DESC01', 'like', '%' . $kelasUnit . '%')
-                    ->orWhere('CODE01', $kelasUnit)
-                    ->orWhereRaw('UPPER(TRIM(DESC01)) = ?', [strtoupper($kelasUnit)]);
-            })
-            ->first();
-    }
-
     private function buildScctcustPayload(
         array $item,
-        mst_sekolah $unit,
         mst_kelas $kelas,
         mst_thn_aka $thn_aka,
         bool $metodeByNodaftar = false,
         ?scctcust $existingCust = null,
     ): array {
+        $unitName = trim((string) ($item['unit'] ?? $kelas->unit ?? ''));
+
         $payload = [
             'NOCUST' => $item['nis'] ?? '-',
             'NMCUST' => $item['nama'],
             'NUM2ND' => $item['nodaftar'] ?? '-',
             'STCUST' => 1,
-            'CODE01' => $unit->CODE01,
+            'CODE01' => '1',
             'DESC01' => config('app.nama_instansi'),
-            'CODE02' => $unit->DESC01,
+            'CODE02' => $unitName !== '' ? $unitName : (string) $kelas->unit,
             'DESC02' => $kelas->jenjang,
             'CODE03' => $kelas->id,
             'DESC03' => $kelas->kelas,

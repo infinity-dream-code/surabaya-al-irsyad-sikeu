@@ -3,7 +3,6 @@
 namespace App\Imports\MasterData;
 
 use App\Models\mst_kelas;
-use App\Models\mst_sekolah;
 use App\Models\mst_thn_aka;
 use App\Models\scctcust;
 use Illuminate\Support\Collection;
@@ -121,38 +120,7 @@ class ImportDataSiswa implements WithMultipleSheets, ToCollection, WithHeadingRo
                 );
             }
 
-            $matchedSekolah = null;
-            if ($matchedKelas) {
-                $unitText = trim((string) ($rowData['unit'] ?? ''));
-                $matchedSekolah = mst_sekolah::query()
-                    ->where(function ($query) use ($unitText, $matchedKelas) {
-                        if ($unitText !== '') {
-                            $query->where('DESC01', 'like', '%' . $unitText . '%')
-                                ->orWhere('CODE01', $unitText)
-                                ->orWhereRaw('UPPER(TRIM(DESC01)) = ?', [strtoupper($unitText)]);
-                        }
-
-                        $kelasUnit = trim((string) ($matchedKelas->unit ?? ''));
-                        if ($kelasUnit !== '') {
-                            $query->orWhere('DESC01', 'like', '%' . $kelasUnit . '%')
-                                ->orWhere('CODE01', $kelasUnit)
-                                ->orWhereRaw('UPPER(TRIM(DESC01)) = ?', [strtoupper($kelasUnit)]);
-                        }
-                    })
-                    ->first();
-            }
-
-            if ($matchedKelas && !$matchedSekolah) {
-                $rowData['status'] = 0;
-                if (!empty($status_ket)) {
-                    $status_ket .= ', ';
-                }
-                $status_ket .= sprintf(
-                    'Unit/sekolah tidak ditemukan (Unit: %s). Insert sekolah di mst_sekolah dulu.',
-                    $rowData['unit'],
-                );
-            }
-
+            // Acuan unit/kelas/kelompok cukup dari mst_kelas (tanpa cek mst_sekolah).
             $rowData['keterangan'] = $status_ket;
             $processedData[] = $rowData;
         }
