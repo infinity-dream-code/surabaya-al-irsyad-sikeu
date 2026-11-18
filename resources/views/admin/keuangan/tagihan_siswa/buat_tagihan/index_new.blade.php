@@ -193,6 +193,33 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="col order-6">
+                            <div class="row d-flex align-items-center">
+                                <div class="col-3">
+                                    <label class="form-label required" for="bulan">
+                                        Bulan
+                                    </label>
+                                </div>
+                                <div class="col">
+                                    <select class="form-select" id="bulan" name="bulan"
+                                            data-control="select2" data-placeholder="Pilih bulan">
+                                        <option value=""></option>
+                                        <option value="07">Juli</option>
+                                        <option value="08">Agustus</option>
+                                        <option value="09">September</option>
+                                        <option value="10">Oktober</option>
+                                        <option value="11">November</option>
+                                        <option value="12">Desember</option>
+                                        <option value="01">Januari</option>
+                                        <option value="02">Februari</option>
+                                        <option value="03">Maret</option>
+                                        <option value="04">April</option>
+                                        <option value="05">Mei</option>
+                                        <option value="06">Juni</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </form>
 
@@ -311,10 +338,13 @@
         }
 
         function resetMainForm() {
-            resetSelect2('id_thn_aka');
-            resetTextInput('id_thn_aka');
+            resetSelect2('tahun_pelajaran');
+            resetSelect2('tahun_angkatan');
             resetSelect2('kelas');
-            resetTextInput('kelas');
+            resetSelect2('nama_tagihan');
+            resetSelect2('bulan');
+            resetTextInput('cari_siswa');
+            $('#fungsi').val('');
         }
 
         function refreshDataTable(newData = []) {
@@ -783,11 +813,35 @@
             })
 
             $('#nama_tagihan').on('change', function (e) {
+                syncBulanFromNamaTagihan();
+                createPeriode()
+            })
+
+            $('#bulan').on('change', function () {
                 createPeriode()
             })
 
             createPeriode()
         });
+
+        function syncBulanFromNamaTagihan() {
+            const bulanDariNama = {
+                JANUARI: '01', FEBRUARI: '02', MARET: '03', APRIL: '04',
+                MEI: '05', JUNI: '06', JULI: '07', AGUSTUS: '08',
+                SEPTEMBER: '09', OKTOBER: '10', NOVEMBER: '11', DESEMBER: '12',
+            };
+            const namaTagihan = String($('#nama_tagihan option:selected').val() || '').toUpperCase();
+            let found = '';
+            for (const [bulan, kode] of Object.entries(bulanDariNama)) {
+                if (namaTagihan.includes(bulan)) {
+                    found = kode;
+                    break;
+                }
+            }
+            if (found) {
+                $('#bulan').val(found).trigger('change.select2');
+            }
+        }
 
         function createPeriode() {
             let tahun_pelajaran = $('#tahun_pelajaran');
@@ -806,18 +860,11 @@
             }
             let partedTahunPelajaram = partTahunPelajaran[0].split("/");
 
-            const bulanDariNama = {
-                JANUARI: '01', FEBRUARI: '02', MARET: '03', APRIL: '04',
-                MEI: '05', JUNI: '06', JULI: '07', AGUSTUS: '08',
-                SEPTEMBER: '09', OKTOBER: '10', NOVEMBER: '11', DESEMBER: '12',
-            };
-            let periodeBulan = '{{ date('m') }}';
-            const namaTagihan = String($('#nama_tagihan option:selected').val() || '').toUpperCase();
-            for (const [bulan, kode] of Object.entries(bulanDariNama)) {
-                if (namaTagihan.includes(bulan)) {
-                    periodeBulan = kode;
-                    break;
-                }
+            // Jangan auto isi dari bulan sekarang. Harus pilih Bulan (atau tertanam di nama tagihan).
+            let periodeBulan = String($('#bulan').val() || '');
+            if (!periodeBulan) {
+                fungsi.val('');
+                return;
             }
 
             if (periodeBulan < 7) {
