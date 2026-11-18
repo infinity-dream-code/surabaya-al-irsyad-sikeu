@@ -362,29 +362,6 @@
             tablePost.draw();
         }
 
-        function syncNamaTagihanFromAkun(namaAkun) {
-            if (!namaAkun) {
-                return;
-            }
-            const $select = $('#nama_tagihan');
-            let matched = false;
-            $select.find('option').each(function () {
-                const val = String($(this).val() || '').trim();
-                const text = String($(this).text() || '').trim();
-                if (val === namaAkun || text === namaAkun) {
-                    $select.val(val).trigger('change');
-                    matched = true;
-                    return false;
-                }
-            });
-            if (!matched) {
-                const option = new Option(namaAkun, namaAkun, true, true);
-                $select.append(option).trigger('change');
-            }
-            createPeriode();
-        }
-
-
         async function getSiswa(Angkatan, jenjang, Kelas, siswa = null) {
             let url = '{{route('admin.keuangan.tagihan-siswa.buat-tagihan.get-siswa')}}';
             let ajaxOptions = {
