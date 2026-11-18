@@ -256,21 +256,23 @@ class DataTagihanController extends Controller
             ], 422);
         }
 
+        // Naik = prioritas lebih tinggi = nomor urutan lebih kecil (-1)
+        // Turun = prioritas lebih rendah = nomor urutan lebih besar (+1)
         if ($request->urutan_tagihan === 'naik') {
-            $targetUrut = $currentUrut + 1;
-        } else {
             $targetUrut = $currentUrut - 1;
             if ($targetUrut <= 0) {
                 return response()->json([
-                    'message' => 'Urutan 1 tidak dapat ditukar ke urutan 0.',
+                    'message' => 'Urutan 1 sudah paling atas, tidak bisa dinaikkan lagi.',
                 ], 422);
             }
+        } else {
+            $targetUrut = $currentUrut + 1;
         }
 
         if (!$this->furutanSlotExists($targetUrut)) {
             $pesan = $request->urutan_tagihan === 'naik'
                 ? "Tidak ada tagihan dengan urutan {$targetUrut}. Urutan sudah paling atas."
-                : "Tidak ada tagihan dengan urutan {$targetUrut}.";
+                : "Tidak ada tagihan dengan urutan {$targetUrut}. Urutan sudah paling bawah.";
 
             return response()->json(['message' => $pesan], 422);
         }
