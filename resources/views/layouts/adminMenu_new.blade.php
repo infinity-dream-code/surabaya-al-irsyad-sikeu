@@ -129,11 +129,13 @@
                                 <div data-i18n="Saldo Virtual Account">Saldo Virtual Account</div>
                             </a>
                         </li>
+                        {{-- Hidden for Al Irsyad Surabaya: Saldo Virtual SAKU
                         <li class="menu-item {{ Request::is(['admin/keuangan/saldo/saldo-virtual-saku*']) ? 'active' : '' }}">
                             <a href="{{ route('admin.keuangan.saldo.saldo-virtual-saku.index') }}" class="menu-link">
                                 <div data-i18n="Saldo Virtual SAKU">Saldo Virtual SAKU</div>
                             </a>
                         </li>
+                        --}}
                     </ul>
                 </li>
                 <li class="menu-item {{ Request::is(['admin/keuangan/hapus-tagihan*']) ? 'active' : '' }}">

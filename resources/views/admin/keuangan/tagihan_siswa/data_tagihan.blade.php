@@ -367,7 +367,7 @@
             thead: true,
             tfoot: true,
             scrollX: true,
-            order: [[11, 'asc']],
+            order: [[10, 'asc']],
             paging: true,
             searching: true,
             fixedHeader: false,

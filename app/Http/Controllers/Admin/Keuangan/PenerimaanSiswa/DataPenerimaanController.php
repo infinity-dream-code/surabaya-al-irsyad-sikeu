@@ -341,7 +341,7 @@ class DataPenerimaanController extends Controller
         $fidBank = (string) ($tagihan->FIDBANK ?? '');
         $h2hCodes = ['1', '2', '3', '4', '5', '6'];
         $isH2h = in_array($fidBank, $h2hCodes, true);
-        $billAm = (int) ($tagihan->BILLAM ?? 0);
+        $billAm = (float) ($tagihan->BILLAM ?? 0);
         $noreff = $tagihan->BILLCD ?: ('REV-' . $tagihan->AA);
         // Hanya H2H: reversal → kredit saldo VA
         $creditToSaldo = $isH2h && $billAm > 0;
@@ -412,6 +412,15 @@ class DataPenerimaanController extends Controller
 
             Cache::increment(Str::slug($this->cacheKey) . '_cache_version');
             Cache::forget(Str::slug($this->cacheKey) . ':total_all_data');
+            // Data Tagihan ikut berubah (PAIDST=0) — invalidate total/sum cache
+            Cache::increment(Str::slug('data_tagihan') . '_cache_version');
+            Cache::forget('data_tagihan:total_all_data');
+            // Saldo VA: hapus cache total kredit/debet agar footer = header
+            $custid = $result['custid'] ?? null;
+            if ($custid) {
+                Cache::forget('total_kredit_custid_' . $custid);
+                Cache::forget('total_debet_custid_' . $custid);
+            }
 
             \Log::info('data-penerimaan.reversal.ok', $result);
 

@@ -535,17 +535,9 @@ class SaldoVirtualAccountController extends Controller
             })->toArray();
 
         if ($custid) {
-            $totalKredit = Cache::remember("total_kredit_custid_" . $custid, 600,
-                function () use ($custid) {
-                    return sccttran::where('CUSTID', $custid)->sum('KREDIT');
-                }
-            );
-
-            $totalDebet = Cache::remember("total_debet_custid_" . $custid, 600,
-                function () use ($custid) {
-                    return sccttran::where('CUSTID', $custid)->sum('DEBET');
-                }
-            );
+            // Jangan cache: setelah reversal/manual bayar total harus langsung sama dengan header
+            $totalKredit = sccttran::where('CUSTID', $custid)->sum('KREDIT');
+            $totalDebet = sccttran::where('CUSTID', $custid)->sum('DEBET');
         }
 
         $response = array(
