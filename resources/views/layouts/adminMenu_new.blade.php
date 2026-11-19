@@ -166,11 +166,7 @@
                         <div data-i18n="Cek Pelunasan">Cek Pelunasan</div>
                     </a>
                 </li>
-                <li class="menu-item {{ Request::is(['admin/rekap-data/cek-lunas-siswa*']) ? 'active' : '' }}">
-                    <a href="{{ route('admin.rekap-data.cek-lunas-siswa.index') }}" class="menu-link">
-                        <div data-i18n="Cek Lunas Siswa">Cek Lunas Siswa</div>
-                    </a>
-                </li>
+                {{-- Hidden for Al Irsyad Surabaya: Cek Lunas Siswa --}}
             </ul>
         </li>
 

@@ -52,7 +52,6 @@ class CekPelunasanController extends Controller
     {
         return [
             ['data' => 'AA', 'name' => 'no', 'columnType' => 'row', 'exportable' => true],
-            ['data' => 'FUrutan', 'name' => 'Urutan', 'searchable' => true, 'orderable' => true, 'exportable' => true],
             ['data' => 'BTA', 'name' => 'Tahun Pelajaran', 'searchable' => true, 'orderable' => true, 'exportable' => true],
             ['data' => 'NOCUST', 'name' => 'NIS', 'searchable' => true, 'orderable' => true, 'exportable' => true],
             ['data' => 'NUM2ND', 'name' => 'No Pendaftaran', 'searchable' => true, 'orderable' => true, 'exportable' => true],
@@ -60,7 +59,7 @@ class CekPelunasanController extends Controller
             ['data' => 'BILLNM', 'name' => 'Nama Tagihan', 'searchable' => true, 'orderable' => true, 'exportable' => true],
             ['data' => 'BILLAM', 'name' => 'Tagihan', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'classname' => 'text-end', 'exportable' => true],
             ['data' => 'PAIDST', 'name' => 'Lunas', 'searchable' => true, 'orderable' => true, 'columnType' => 'boolean', 'trueVal' => 'LUNAS', 'falseVal' => 'BELUM BAYAR', 'exportable' => true],
-
+            ['data' => 'PAIDDT', 'name' => 'Tanggal Bayar', 'searchable' => true, 'orderable' => true, 'columnType' => 'timestamp', 'exportable' => true],
         ];
     }
 
