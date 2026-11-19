@@ -650,20 +650,28 @@ function dtButtons(options, buttons) {
                                 return date.toLocaleDateString('id-ID', dateOptions);
                             case 'timestamp':
                             case 'datetime':
-                                if (!data) return '';
-                                if (config.extend === 'excel') {
-                                    return dateToExcelSerial(new Date(data));
+                                if (data === null || data === undefined || data === '' || data === 0 || data === '0'
+                                    || data === '0000-00-00' || data === '0000-00-00 00:00:00') {
+                                    return '';
                                 }
-                                let tsDate = new Date(data);
-                                let tsOptions = {
-                                    weekday: 'long',
-                                    day: 'numeric',
-                                    month: 'long',
-                                    year: 'numeric',
-                                    hour: 'numeric',
-                                    minute: 'numeric'
-                                };
-                                return tsDate.toLocaleDateString('id-ID', tsOptions);
+                                {
+                                    let tsDate = new Date(data);
+                                    if (isNaN(tsDate.getTime()) || tsDate.getFullYear() < 1980) {
+                                        return '';
+                                    }
+                                    if (config.extend === 'excel') {
+                                        return dateToExcelSerial(tsDate);
+                                    }
+                                    let tsOptions = {
+                                        weekday: 'long',
+                                        day: 'numeric',
+                                        month: 'long',
+                                        year: 'numeric',
+                                        hour: 'numeric',
+                                        minute: 'numeric'
+                                    };
+                                    return tsDate.toLocaleDateString('id-ID', tsOptions);
+                                }
                             case 'periode':
                             case 'yearmonth':
                                 if (!data || typeof data !== 'string' || data.length !== 6 || !/^\d{6}$/.test(data)) {
@@ -1166,7 +1174,15 @@ async function getDT(options) {
                             case 'timestamp':
                                 renderFunc = function (data, type, row) {
                                     if (type === 'display' || type === 'filter') {
+                                        if (data === null || data === undefined || data === '' || data === 0 || data === '0'
+                                            || data === '0000-00-00' || data === '0000-00-00 00:00:00') {
+                                            return '';
+                                        }
                                         let date = new Date(data);
+                                        // Epoch / tanggal invalid → jangan tampilkan 1970
+                                        if (isNaN(date.getTime()) || date.getFullYear() < 1980) {
+                                            return '';
+                                        }
                                         let options = {
                                             weekday: 'long',
                                             day: 'numeric',

@@ -113,7 +113,12 @@
                         <div data-i18n="Manual Pembayaran">Manual Pembayaran</div>
                     </a>
                 </li>
-                
+                <li class="menu-item {{ Request::is(['admin/keuangan/penerimaan-siswa/data-penerimaan*']) ? 'active' : '' }}">
+                    <a href="{{ route('admin.keuangan.penerimaan-siswa.data-penerimaan.index') }}" class="menu-link">
+                        <div data-i18n="Data Penerimaan">Data Penerimaan</div>
+                    </a>
+                </li>
+
                 <li class="menu-item {{ Request::is(['admin/keuangan/saldo*']) ? 'active open' : '' }}">
                     <a href="javascript:void(0);" class="menu-link menu-toggle">
                         <div data-i18n="Saldo">Saldo</div>

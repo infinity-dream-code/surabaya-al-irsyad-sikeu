@@ -283,10 +283,27 @@ class CekPelunasanController extends Controller
             });
         }
 
-        $data = $records->map(fn ($item) => $item instanceof \Illuminate\Database\Eloquent\Model
-            ? $item->toArray()
-            : (array) $item
-        )->values()->all();
+        $data = $records->map(function ($item) {
+            $row = $item instanceof \Illuminate\Database\Eloquent\Model
+                ? $item->toArray()
+                : (array) $item;
+
+            $paidDt = $row['PAIDDT'] ?? $row['paiddt'] ?? null;
+            $paidSt = (int) ($row['PAIDST'] ?? $row['paidst'] ?? 0);
+            if (
+                $paidSt !== 1
+                || $paidDt === null
+                || $paidDt === ''
+                || $paidDt === '0000-00-00'
+                || $paidDt === '0000-00-00 00:00:00'
+                || $paidDt === '1970-01-01 00:00:00'
+                || $paidDt === '1970-01-01 07:00:00'
+            ) {
+                $row['PAIDDT'] = null;
+            }
+
+            return $row;
+        })->values()->all();
 
         $response = [
             "draw" => intval($draw),
