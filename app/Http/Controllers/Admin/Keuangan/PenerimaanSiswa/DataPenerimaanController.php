@@ -340,12 +340,10 @@ class DataPenerimaanController extends Controller
 
         $fidBank = (string) ($tagihan->FIDBANK ?? '');
         $h2hCodes = ['1', '2', '3', '4', '5', '6'];
-        // H2H + Manual SALDO + transfer bank → kredit saldo VA
-        $creditToSaldo = in_array($fidBank, array_merge($h2hCodes, [
-            '1140002', '1140001', '1140003', '1140005',
-        ]), true);
+        // Semua metode bayar: reversal → kredit saldo VA (termasuk Manual Cash 1140000)
         $billAm = (int) ($tagihan->BILLAM ?? 0);
         $noreff = $tagihan->BILLCD ?: ('REV-' . $tagihan->AA);
+        $creditToSaldo = $billAm > 0;
 
         try {
             $result = DB::connection('DATA_MYSQL')->transaction(function () use ($tagihan, $fidBank, $h2hCodes, $creditToSaldo, $billAm, $noreff) {
@@ -362,9 +360,11 @@ class DataPenerimaanController extends Controller
                 }
 
                 $tranUrut = null;
-                if ($creditToSaldo && $billAm > 0) {
+                if ($creditToSaldo) {
                     $tranUrut = (int) DB::connection('DATA_MYSQL')->table('sccttran')->max('urut') + 1;
-                    $metode = in_array($fidBank, $h2hCodes, true) ? 'REVERSAL H2H' : 'JURNAL SALDO';
+                    $metode = in_array($fidBank, $h2hCodes, true)
+                        ? 'REVERSAL H2H'
+                        : 'REVERSAL';
 
                     $ok = DB::connection('DATA_MYSQL')->table('sccttran')->insert([
                         'urut' => $tranUrut,
@@ -417,14 +417,7 @@ class DataPenerimaanController extends Controller
 
             \Log::info('data-penerimaan.reversal.ok', $result);
 
-            $msg = 'Reversal berhasil. Tagihan AA ' . $result['aa'] . ' → belum bayar.';
-            if ($result['credited']) {
-                $msg .= ' Kredit saldo sccttran urut=' . $result['tran_urut'] . ' nominal Rp ' . number_format($result['billam'], 0, ',', '.') . '.';
-            } else {
-                $msg .= ' (Metode ' . ($result['fidbank'] ?: '-') . ' tidak dikreditkan ke saldo)';
-            }
-
-            return response()->json(['message' => $msg, 'data' => $result], 200);
+            return response()->json(['message' => 'Reversal berhasil.', 'data' => $result], 200);
         } catch (\Throwable $e) {
             \Log::error('data-penerimaan.reversal.fail', [
                 'aa' => $aa,
