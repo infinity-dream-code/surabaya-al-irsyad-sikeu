@@ -93,16 +93,16 @@ class DataPenerimaanController extends Controller
     public function getColumn()
     {
         return [
-            ['data' => 'AA', 'name' => 'no', 'columnType' => 'row'],
-            ['data' => 'nocust', 'name' => 'NIS', 'searchable' => true, 'orderable' => true],
-            ['data' => 'nmcust', 'name' => 'NAMA', 'searchable' => true, 'orderable' => true],
-            ['data' => 'CODE02', 'name' => 'Unit', 'searchable' => true, 'orderable' => true],
-            ['data' => 'DESC02', 'name' => 'Kelas', 'searchable' => true, 'orderable' => true],
-            ['data' => 'BILLNM', 'name' => 'Nama Tagihan', 'searchable' => true, 'orderable' => true],
-            ['data' => 'BILLAM', 'name' => 'Tagihan', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'className' => 'text-end'],
-            ['data' => 'FIDBANK', 'name' => 'Metode', 'columnType' => 'custom_code_tagihan', 'searchable' => true, 'orderable' => true],
-            ['data' => 'PAIDDT', 'name' => 'Tanggal Bayar', 'columnType' => 'timestamp', 'searchable' => true, 'orderable' => true],
-            ['data' => 'BTA', 'name' => 'Tahun AKA', 'searchable' => true, 'orderable' => true],
+            ['data' => 'AA', 'name' => 'no', 'columnType' => 'row', 'duplicate' => false],
+            ['data' => 'nocust', 'name' => 'NIS', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
+            ['data' => 'nmcust', 'name' => 'NAMA', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
+            ['data' => 'CODE02', 'name' => 'Unit', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
+            ['data' => 'DESC02', 'name' => 'Kelas', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
+            ['data' => 'BILLNM', 'name' => 'Nama Tagihan', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
+            ['data' => 'BILLAM', 'name' => 'Tagihan', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'className' => 'text-end', 'duplicate' => false],
+            ['data' => 'FIDBANK', 'name' => 'Metode', 'columnType' => 'custom_code_tagihan', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
+            ['data' => 'PAIDDT', 'name' => 'Tanggal Bayar', 'columnType' => 'timestamp', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
+            ['data' => 'BTA', 'name' => 'Tahun AKA', 'searchable' => true, 'orderable' => true, 'duplicate' => false],
             [
                 'data' => 'delete',
                 'name' => 'Reversal',
@@ -283,7 +283,8 @@ class DataPenerimaanController extends Controller
             ->map(function ($item, $index) {
                 $item->item_id = $item->AA;
                 $item->CUSTID = $item->CUSTID;
-                $item->delete = true;
+                // Unik per baris agar tombol Reversal tidak ter-merge (jamak)
+                $item->delete = (string) $item->AA;
                 return $item;
             })->toArray();
 
