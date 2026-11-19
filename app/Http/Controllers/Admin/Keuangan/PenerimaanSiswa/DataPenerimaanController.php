@@ -320,61 +320,116 @@ class DataPenerimaanController extends Controller
 
     public function destroy($id, Request $request)
     {
-        // Reversal: kembalikan status tagihan ke belum bayar + kredit saldo bila perlu.
+        // Reversal: update scctbill + insert sccttran via query builder (bukan Eloquent
+        // create/update yang sering gagal diam-diam karena PK incrementing=false).
         $custId = $request->input('user_id') ?? $request->input('custid');
-        $tagihan = scctbill::where('AA', $id)
+        $aa = is_numeric($id) ? (int) $id : $id;
+
+        $tagihan = DB::connection('DATA_MYSQL')->table('scctbill')
+            ->where('AA', $aa)
             ->when($custId, fn ($q) => $q->where('CUSTID', $custId))
             ->where('PAIDST', 1)
             ->first();
+
         if (!$tagihan) {
-            return response()->json(['message' => 'Tagihan terbayar tidak ditemukan!'], 422);
+            return response()->json([
+                'message' => 'Tagihan terbayar tidak ditemukan!',
+                'debug' => ['aa' => $aa, 'custid' => $custId],
+            ], 422);
         }
 
-        $db = DB::connection('DATA_MYSQL');
         $fidBank = (string) ($tagihan->FIDBANK ?? '');
-        // H2H VA (1-6) + Manual SALDO harus kembali ke saldo VA
         $h2hCodes = ['1', '2', '3', '4', '5', '6'];
-        $creditToSaldo = $fidBank === '1140002' || in_array($fidBank, $h2hCodes, true);
+        // H2H + Manual SALDO + transfer bank → kredit saldo VA
+        $creditToSaldo = in_array($fidBank, array_merge($h2hCodes, [
+            '1140002', '1140001', '1140003', '1140005',
+        ]), true);
+        $billAm = (int) ($tagihan->BILLAM ?? 0);
+        $noreff = $tagihan->BILLCD ?: ('REV-' . $tagihan->AA);
 
         try {
-            $db->beginTransaction();
+            $result = DB::connection('DATA_MYSQL')->transaction(function () use ($tagihan, $fidBank, $h2hCodes, $creditToSaldo, $billAm, $noreff) {
+                $affected = DB::connection('DATA_MYSQL')->table('scctbill')
+                    ->where('AA', $tagihan->AA)
+                    ->where('PAIDST', 1)
+                    ->update([
+                        'PAIDST' => 0,
+                        'PAIDDT' => null,
+                    ]);
 
-            // Jangan hapus FIDBANK — untuk jejak metode bayar
-            scctbill::where('AA', $tagihan->AA)->update([
-                'PAIDST' => 0,
-                'PAIDDT' => null,
-            ]);
+                if ($affected < 1) {
+                    throw new \RuntimeException('Gagal update scctbill (0 baris). AA=' . $tagihan->AA);
+                }
 
-            if ($creditToSaldo && (int) $tagihan->BILLAM > 0) {
-                $metode = in_array($fidBank, $h2hCodes, true)
-                    ? 'REVERSAL H2H'
-                    : 'JURNAL SALDO';
+                $tranUrut = null;
+                if ($creditToSaldo && $billAm > 0) {
+                    $tranUrut = (int) DB::connection('DATA_MYSQL')->table('sccttran')->max('urut') + 1;
+                    $metode = in_array($fidBank, $h2hCodes, true) ? 'REVERSAL H2H' : 'JURNAL SALDO';
 
-                sccttran::create([
-                    'CUSTID' => $tagihan->CUSTID,
-                    'NOREFF' => $tagihan->BILLCD ?: ('REV-' . $tagihan->AA),
-                    'METODE' => $metode,
-                    'FIDBANK' => '1140002',
-                    'KDCHANNEL' => 11,
-                    'TRXDATE' => now()->format('Y-m-d H:i:s'),
-                    'DEBET' => 0,
-                    'KREDIT' => (int) $tagihan->BILLAM,
-                    'TRANSNO' => Auth::user()->username ?? 'reversal',
-                ]);
-            }
+                    $ok = DB::connection('DATA_MYSQL')->table('sccttran')->insert([
+                        'urut' => $tranUrut,
+                        'CUSTID' => $tagihan->CUSTID,
+                        'NOREFF' => $noreff,
+                        'METODE' => $metode,
+                        'FIDBANK' => '1140002',
+                        'KDCHANNEL' => 11,
+                        'TRXDATE' => now()->format('Y-m-d H:i:s'),
+                        'DEBET' => 0,
+                        'KREDIT' => $billAm,
+                        'TRANSNO' => Auth::user()->username ?? 'reversal',
+                    ]);
 
-            $db->commit();
+                    if (!$ok) {
+                        throw new \RuntimeException('Gagal insert sccttran.');
+                    }
+                }
+
+                // Verifikasi langsung di koneksi yang sama
+                $billCheck = DB::connection('DATA_MYSQL')->table('scctbill')
+                    ->where('AA', $tagihan->AA)
+                    ->first(['AA', 'PAIDST', 'PAIDDT']);
+                if (!$billCheck || (int) $billCheck->PAIDST !== 0) {
+                    throw new \RuntimeException('Verifikasi scctbill gagal setelah update.');
+                }
+
+                if ($tranUrut) {
+                    $tranCheck = DB::connection('DATA_MYSQL')->table('sccttran')
+                        ->where('urut', $tranUrut)
+                        ->first();
+                    if (!$tranCheck) {
+                        throw new \RuntimeException('Verifikasi sccttran gagal setelah insert. urut=' . $tranUrut);
+                    }
+                }
+
+                return [
+                    'aa' => $tagihan->AA,
+                    'custid' => $tagihan->CUSTID,
+                    'billam' => $billAm,
+                    'fidbank' => $fidBank,
+                    'credited' => (bool) $tranUrut,
+                    'tran_urut' => $tranUrut,
+                    'noreff' => $noreff,
+                ];
+            });
+
             Cache::increment(Str::slug($this->cacheKey) . '_cache_version');
             Cache::forget(Str::slug($this->cacheKey) . ':total_all_data');
 
-            $msg = 'Reversal berhasil. Tagihan dikembalikan ke status belum bayar.';
-            if ($creditToSaldo) {
-                $msg .= ' Nominal telah dikreditkan ke saldo VA.';
+            \Log::info('data-penerimaan.reversal.ok', $result);
+
+            $msg = 'Reversal berhasil. Tagihan AA ' . $result['aa'] . ' → belum bayar.';
+            if ($result['credited']) {
+                $msg .= ' Kredit saldo sccttran urut=' . $result['tran_urut'] . ' nominal Rp ' . number_format($result['billam'], 0, ',', '.') . '.';
+            } else {
+                $msg .= ' (Metode ' . ($result['fidbank'] ?: '-') . ' tidak dikreditkan ke saldo)';
             }
 
-            return response()->json(['message' => $msg], 200);
+            return response()->json(['message' => $msg, 'data' => $result], 200);
         } catch (\Throwable $e) {
-            $db->rollBack();
+            \Log::error('data-penerimaan.reversal.fail', [
+                'aa' => $aa,
+                'error' => $e->getMessage(),
+            ]);
             return response()->json([
                 'message' => 'Reversal gagal: ' . $e->getMessage(),
             ], 422);

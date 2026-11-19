@@ -429,26 +429,32 @@
             let request = null;
             switch (form) {
                 case 'delete':
-                    loadingAlert('Menghapus tagihan....');
+                    loadingAlert('Memproses reversal....');
                     const item_id = document.getElementById('delete_id').value;
                     const user_id = document.getElementById('user_delete_id').value;
-                    let url = '{{route('admin.keuangan.penerimaan-siswa.data-penerimaan.destroy',':id')}}'
-                    url = url.replace(':id', item_id)
+                    let url = '{{ route('admin.keuangan.penerimaan-siswa.data-penerimaan.destroy', ['id' => '__ID__']) }}';
+                    url = url.replace('__ID__', encodeURIComponent(item_id));
 
                     if (!item_id || !user_id) {
-                        errorAlert('Tagihan tidak ditemukan!');
+                        errorAlert('Tagihan tidak ditemukan! (AA/CUSTID kosong)');
                         return;
                     }
-                    request = new Request(
-                        url, {
-                            method: "DELETE",
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': csrfToken,
-                            }, body: JSON.stringify({
-                                user_id: user_id
-                            })
-                        });
+                    // POST + _method supaya body pasti terbaca di server
+                    const body = new URLSearchParams();
+                    body.set('_method', 'DELETE');
+                    body.set('_token', csrfToken);
+                    body.set('user_id', user_id);
+                    body.set('custid', user_id);
+                    request = new Request(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                            'X-CSRF-TOKEN': csrfToken,
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: body.toString(),
+                    });
                     break;
                 default:
                     errorAlert('Data tidak valid!');
