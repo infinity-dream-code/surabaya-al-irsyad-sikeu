@@ -340,13 +340,14 @@ class DataPenerimaanController extends Controller
 
         $fidBank = (string) ($tagihan->FIDBANK ?? '');
         $h2hCodes = ['1', '2', '3', '4', '5', '6'];
-        // Semua metode bayar: reversal → kredit saldo VA (termasuk Manual Cash 1140000)
+        $isH2h = in_array($fidBank, $h2hCodes, true);
         $billAm = (int) ($tagihan->BILLAM ?? 0);
         $noreff = $tagihan->BILLCD ?: ('REV-' . $tagihan->AA);
-        $creditToSaldo = $billAm > 0;
+        // Hanya H2H: reversal → kredit saldo VA
+        $creditToSaldo = $isH2h && $billAm > 0;
 
         try {
-            $result = DB::connection('DATA_MYSQL')->transaction(function () use ($tagihan, $fidBank, $h2hCodes, $creditToSaldo, $billAm, $noreff) {
+            $result = DB::connection('DATA_MYSQL')->transaction(function () use ($tagihan, $fidBank, $creditToSaldo, $billAm, $noreff) {
                 $affected = DB::connection('DATA_MYSQL')->table('scctbill')
                     ->where('AA', $tagihan->AA)
                     ->where('PAIDST', 1)
@@ -362,15 +363,12 @@ class DataPenerimaanController extends Controller
                 $tranUrut = null;
                 if ($creditToSaldo) {
                     $tranUrut = (int) DB::connection('DATA_MYSQL')->table('sccttran')->max('urut') + 1;
-                    $metode = in_array($fidBank, $h2hCodes, true)
-                        ? 'REVERSAL H2H'
-                        : 'REVERSAL';
 
                     $ok = DB::connection('DATA_MYSQL')->table('sccttran')->insert([
                         'urut' => $tranUrut,
                         'CUSTID' => $tagihan->CUSTID,
                         'NOREFF' => $noreff,
-                        'METODE' => $metode,
+                        'METODE' => 'REVERSAL H2H',
                         'FIDBANK' => '1140002',
                         'KDCHANNEL' => 11,
                         'TRXDATE' => now()->format('Y-m-d H:i:s'),
