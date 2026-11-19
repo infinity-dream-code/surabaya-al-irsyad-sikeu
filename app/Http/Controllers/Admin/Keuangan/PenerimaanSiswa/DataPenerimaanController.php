@@ -52,7 +52,9 @@ class DataPenerimaanController extends Controller
         $this->middleware(function ($request, $next) {
             if (\Illuminate\Support\Facades\Auth::check()) {
                 $user = Auth::user();
-                $this->sekolah = $user->sekolah;
+                // Al Irsyad: unit; kosong jangan dipakai filter (bikin hasil 0)
+                $unit = trim((string) ($user->unit ?? $user->sekolah ?? ''));
+                $this->sekolah = $unit !== '' ? $unit : null;
             }
             return $next($request);
         });
@@ -152,7 +154,7 @@ class DataPenerimaanController extends Controller
         $filterQuery = null;
 
         $filter = FilterHandler::resolveFilters($request->input('filter'), $this->allowedFilters);
-        if ($this->sekolah !== null) {
+        if (!blank($this->sekolah)) {
             $filter = array_merge($filter, [
                 'scctcust.CODE02' => $this->sekolah,
             ]);
@@ -188,10 +190,17 @@ class DataPenerimaanController extends Controller
                             $filters[] = ['scctcust.DESC03', '=', $val[2]];
                         }
                         break;
+                    case 'scctcust.NOCUST':
+                        $filters[] = ['scctcust.NOCUST', 'like', '%' . trim((string) $val) . '%'];
+                        break;
+                    case 'scctcust.NMCUST':
                     case 'scctcust.nmcust':
-                        $val = is_numeric($val) ? $val : '%' . $val . '%';
-                        $colName = is_numeric($val) ? 'scctcust.NOCUST' : $key;
-                        ($colName) && $filters[] = [$colName, 'like', $val];
+                        $raw = trim((string) $val);
+                        if (is_numeric($raw)) {
+                            $filters[] = ['scctcust.NOCUST', 'like', '%' . $raw . '%'];
+                        } else {
+                            $filters[] = ['scctcust.NMCUST', 'like', '%' . $raw . '%'];
+                        }
                         break;
                     default:
                         ($key) && $filters[] = [$key, '=', $val];
@@ -242,7 +251,7 @@ class DataPenerimaanController extends Controller
             ->whereNotNull('scctbill.PAIDDT')
             ->where('scctbill.PAIDDT', '!=', '0000-00-00 00:00:00')
             ->where('scctbill.PAIDDT', '!=', '0000-00-00')
-            ->whereRaw('YEAR(scctbill.PAIDDT) >= 1980')
+            ->whereRaw("scctbill.PAIDDT > '1980-01-01 00:00:00'")
             ->when(!blank($searchValue), function ($query) use ($whereAny, $searchValue) {
                 $query->where(function ($q) use ($whereAny, $searchValue) {
                     $sanitizeSearch = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $searchValue);
@@ -311,7 +320,7 @@ class DataPenerimaanController extends Controller
 
     public function destroy($id, Request $request)
     {
-        // Reversal: kembalikan status tagihan ke belum bayar.
+        // Reversal: kembalikan status tagihan ke belum bayar + kredit saldo bila perlu.
         $custId = $request->input('user_id') ?? $request->input('custid');
         $tagihan = scctbill::where('AA', $id)
             ->when($custId, fn ($q) => $q->where('CUSTID', $custId))
@@ -322,27 +331,34 @@ class DataPenerimaanController extends Controller
         }
 
         $db = DB::connection('DATA_MYSQL');
+        $fidBank = (string) ($tagihan->FIDBANK ?? '');
+        // H2H VA (1-6) + Manual SALDO harus kembali ke saldo VA
+        $h2hCodes = ['1', '2', '3', '4', '5', '6'];
+        $creditToSaldo = $fidBank === '1140002' || in_array($fidBank, $h2hCodes, true);
 
         try {
             $db->beginTransaction();
 
+            // Jangan hapus FIDBANK — untuk jejak metode bayar
             scctbill::where('AA', $tagihan->AA)->update([
                 'PAIDST' => 0,
                 'PAIDDT' => null,
-                'FIDBANK' => null,
             ]);
 
-            // Jika bayar dari saldo VA, kreditkan kembali ke sccttran
-            if ((string) $tagihan->FIDBANK === '1140002') {
+            if ($creditToSaldo && (int) $tagihan->BILLAM > 0) {
+                $metode = in_array($fidBank, $h2hCodes, true)
+                    ? 'REVERSAL H2H'
+                    : 'JURNAL SALDO';
+
                 sccttran::create([
                     'CUSTID' => $tagihan->CUSTID,
-                    'NOREFF' => $tagihan->BILLCD,
-                    'METODE' => 'JURNAL SALDO',
+                    'NOREFF' => $tagihan->BILLCD ?: ('REV-' . $tagihan->AA),
+                    'METODE' => $metode,
                     'FIDBANK' => '1140002',
                     'KDCHANNEL' => 11,
                     'TRXDATE' => now()->format('Y-m-d H:i:s'),
                     'DEBET' => 0,
-                    'KREDIT' => $tagihan->BILLAM,
+                    'KREDIT' => (int) $tagihan->BILLAM,
                     'TRANSNO' => Auth::user()->username ?? 'reversal',
                 ]);
             }
@@ -351,7 +367,12 @@ class DataPenerimaanController extends Controller
             Cache::increment(Str::slug($this->cacheKey) . '_cache_version');
             Cache::forget(Str::slug($this->cacheKey) . ':total_all_data');
 
-            return response()->json(['message' => 'Reversal berhasil. Tagihan dikembalikan ke status belum bayar.'], 200);
+            $msg = 'Reversal berhasil. Tagihan dikembalikan ke status belum bayar.';
+            if ($creditToSaldo) {
+                $msg .= ' Nominal telah dikreditkan ke saldo VA.';
+            }
+
+            return response()->json(['message' => $msg], 200);
         } catch (\Throwable $e) {
             $db->rollBack();
             return response()->json([
