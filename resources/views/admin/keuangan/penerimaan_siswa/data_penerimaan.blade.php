@@ -307,15 +307,15 @@
                     <div class="modal-status bg-danger"></div>
                     <div class="modal-header ">
                         <div class="modal-title">
-                            Batalkan Pembayaran
+                            Reversal Pembayaran
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body text-capitalize text-center py-4">
-                        <span class="ri-delete-bin-line ri-3x"></span>
-                        <h4>Batalkan pembayaran tagihan?</h4>
+                        <span class="ri-arrow-go-back-line ri-3x"></span>
+                        <h4>Reversal pembayaran tagihan?</h4>
                         <div class="">
-                            anda yakin akan Batalkan pembayaran tagihan?
+                            Tagihan akan dikembalikan ke status belum bayar.
                         </div>
                     </div>
                     <div class="modal-body py-4">
@@ -403,13 +403,16 @@
                 const rowEl = e.target.closest('tr');
 
                 if (rowEl) {
-                    const rowData = DT[`${dtOptions.tableId}`].row(rowEl).data();
+                    const rowData = DT[`${dtOptions.tableId}`].row(rowEl).data() || {};
                     Object.entries(rowData).forEach(([key, value]) => {
                         let input = document.querySelector(`#form-delete [name="${key.toLowerCase()}"]`);
                         if (input) {
-                            input.value = value;
+                            input.value = value ?? '';
                         }
                     });
+                    // Pastikan ID tagihan + CUSTID terisi untuk reversal
+                    document.getElementById('delete_id').value = rowData.item_id || rowData.AA || '';
+                    document.getElementById('user_delete_id').value = rowData.CUSTID || rowData.custid || '';
                     modalDelete.show();
                 }
             }

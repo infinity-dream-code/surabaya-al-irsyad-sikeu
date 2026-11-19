@@ -105,15 +105,18 @@ class DataPenerimaanController extends Controller
             ['data' => 'BTA', 'name' => 'Tahun AKA', 'searchable' => true, 'orderable' => true],
             [
                 'data' => 'delete',
-                'name' => '',
-                'dataVal' => false,
+                'name' => 'Reversal',
+                'dataVal' => true,
                 'columnType' => 'button',
                 'className' => 'text-center',
                 'button' => 'action',
-                'buttonText' => 'Batal',
+                'buttonText' => 'Reversal',
                 'buttonClass' => 'btn btn-sm btn-danger btn-batal-bayar',
                 'buttonLink' => '#modal-delete',
-                'buttonIcon' => 'ri-delete-bin-line me-2'
+                'buttonIcon' => 'ri-arrow-go-back-line me-2',
+                'duplicate' => false,
+                'orderable' => false,
+                'searchable' => false,
             ],
         ];
     }
@@ -236,7 +239,10 @@ class DataPenerimaanController extends Controller
 
         $query = scctbill::leftJoin('scctcust', 'scctcust.CUSTID', 'scctbill.CUSTID')
             ->where('scctbill.PAIDST', 1)
-            ->where('scctbill.PAIDDT', '!=', null)
+            ->whereNotNull('scctbill.PAIDDT')
+            ->where('scctbill.PAIDDT', '!=', '0000-00-00 00:00:00')
+            ->where('scctbill.PAIDDT', '!=', '0000-00-00')
+            ->whereRaw('YEAR(scctbill.PAIDDT) >= 1980')
             ->when(!blank($searchValue), function ($query) use ($whereAny, $searchValue) {
                 $query->where(function ($q) use ($whereAny, $searchValue) {
                     $sanitizeSearch = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $searchValue);
@@ -276,6 +282,7 @@ class DataPenerimaanController extends Controller
             ->get()
             ->map(function ($item, $index) {
                 $item->item_id = $item->AA;
+                $item->CUSTID = $item->CUSTID;
                 $item->delete = true;
                 return $item;
             })->toArray();
@@ -301,52 +308,55 @@ class DataPenerimaanController extends Controller
         );
     }
 
-    public
-    function destroy($id, Request $request)
+    public function destroy($id, Request $request)
     {
-        //UPDATE SCCTBILL SET PAIDST = 0 , PAIDDT = null
-        //	WHERE  AA = p_AA
-        //	AND  CUSTID = v_CUSTID;
-        //
-        //	INSERT INTO SCCTTRAN (CUSTID, NOREFF, FIDBANK, TRXDATE, KDCHANNEL, KREDIT, METODE,TRANSNO)
-        //	VALUES
-        //	(v_CUSTID, p_BILLCD , 1140002 , NOW(), 11, v_BILLAM ,'JURNAL SALDO', p_users)
-        //	;
-
+        // Reversal: kembalikan status tagihan ke belum bayar.
+        $custId = $request->input('user_id') ?? $request->input('custid');
         $tagihan = scctbill::where('AA', $id)
-            ->where('CUSTID', '=', $request->input('user_id'))
-            ->where('PAIDST', '=', 1)
+            ->when($custId, fn ($q) => $q->where('CUSTID', $custId))
+            ->where('PAIDST', 1)
             ->first();
-        if (!$tagihan) return response()->json(['message' => 'Tagihan tidak ditemukan!'], 422);
+        if (!$tagihan) {
+            return response()->json(['message' => 'Tagihan terbayar tidak ditemukan!'], 422);
+        }
+
+        $db = DB::connection('DATA_MYSQL');
 
         try {
-            DB::beginTransaction();
-            $tagihan->update([
+            $db->beginTransaction();
+
+            scctbill::where('AA', $tagihan->AA)->update([
                 'PAIDST' => 0,
-                'PAIDDT' => null
+                'PAIDDT' => null,
+                'FIDBANK' => null,
             ]);
 
-            if ((string)$tagihan->FIDBANK === '1140002') {
+            // Jika bayar dari saldo VA, kreditkan kembali ke sccttran
+            if ((string) $tagihan->FIDBANK === '1140002') {
                 sccttran::create([
                     'CUSTID' => $tagihan->CUSTID,
                     'NOREFF' => $tagihan->BILLCD,
                     'METODE' => 'JURNAL SALDO',
                     'FIDBANK' => '1140002',
                     'KDCHANNEL' => 11,
-                    'TRXDATE' => now(),
+                    'TRXDATE' => now()->format('Y-m-d H:i:s'),
                     'DEBET' => 0,
                     'KREDIT' => $tagihan->BILLAM,
-                    'TRANSNO' => Auth::user()->username,
+                    'TRANSNO' => Auth::user()->username ?? 'reversal',
                 ]);
             }
 
-            DB::commit();
-            return response()->json(['message' => 'Pembayaran tagihan dibatalkan!'], 200);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Pembatalah pembayaran tagihan gagal dilakukan!'], 422);
-        }
+            $db->commit();
+            Cache::increment(Str::slug($this->cacheKey) . '_cache_version');
+            Cache::forget(Str::slug($this->cacheKey) . ':total_all_data');
 
+            return response()->json(['message' => 'Reversal berhasil. Tagihan dikembalikan ke status belum bayar.'], 200);
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            return response()->json([
+                'message' => 'Reversal gagal: ' . $e->getMessage(),
+            ], 422);
+        }
     }
 
     public function cetak(Request $request)

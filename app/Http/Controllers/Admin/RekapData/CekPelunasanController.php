@@ -51,15 +51,15 @@ class CekPelunasanController extends Controller
     public function getColumn()
     {
         return [
-            ['data' => 'AA', 'name' => 'no', 'columnType' => 'row', 'exportable' => true],
-            ['data' => 'BTA', 'name' => 'Tahun Pelajaran', 'searchable' => true, 'orderable' => true, 'exportable' => true],
-            ['data' => 'NOCUST', 'name' => 'NIS', 'searchable' => true, 'orderable' => true, 'exportable' => true],
-            ['data' => 'NUM2ND', 'name' => 'No Pendaftaran', 'searchable' => true, 'orderable' => true, 'exportable' => true],
-            ['data' => 'NMCUST', 'name' => 'NAMA', 'searchable' => true, 'orderable' => true, 'exportable' => true],
-            ['data' => 'BILLNM', 'name' => 'Nama Tagihan', 'searchable' => true, 'orderable' => true, 'exportable' => true],
-            ['data' => 'BILLAM', 'name' => 'Tagihan', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'classname' => 'text-end', 'exportable' => true],
-            ['data' => 'PAIDST', 'name' => 'Lunas', 'searchable' => true, 'orderable' => true, 'columnType' => 'boolean', 'trueVal' => 'LUNAS', 'falseVal' => 'BELUM BAYAR', 'exportable' => true],
-            ['data' => 'PAIDDT', 'name' => 'Tanggal Bayar', 'searchable' => true, 'orderable' => true, 'columnType' => 'timestamp', 'exportable' => true],
+            ['data' => 'AA', 'name' => 'no', 'columnType' => 'row', 'duplicate' => false, 'exportable' => true],
+            ['data' => 'BTA', 'name' => 'Tahun Pelajaran', 'searchable' => true, 'orderable' => true, 'duplicate' => false, 'exportable' => true],
+            ['data' => 'NOCUST', 'name' => 'NIS', 'searchable' => true, 'orderable' => true, 'duplicate' => false, 'exportable' => true],
+            ['data' => 'NUM2ND', 'name' => 'No Pendaftaran', 'searchable' => true, 'orderable' => true, 'duplicate' => false, 'exportable' => true],
+            ['data' => 'NMCUST', 'name' => 'NAMA', 'searchable' => true, 'orderable' => true, 'duplicate' => false, 'exportable' => true],
+            ['data' => 'BILLNM', 'name' => 'Nama Tagihan', 'searchable' => true, 'orderable' => true, 'duplicate' => false, 'exportable' => true],
+            ['data' => 'BILLAM', 'name' => 'Tagihan', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency', 'classname' => 'text-end', 'duplicate' => false, 'exportable' => true],
+            ['data' => 'PAIDST', 'name' => 'Lunas', 'searchable' => true, 'orderable' => true, 'columnType' => 'boolean', 'trueVal' => 'LUNAS', 'falseVal' => 'BELUM BAYAR', 'duplicate' => false, 'exportable' => true],
+            ['data' => 'PAIDDT', 'name' => 'Tanggal Bayar', 'searchable' => true, 'orderable' => true, 'duplicate' => false, 'exportable' => true],
         ];
     }
 
@@ -288,10 +288,20 @@ class CekPelunasanController extends Controller
                 ? $item->toArray()
                 : (array) $item;
 
-            $row['PAIDDT'] = $this->normalizePaidDt(
+            $paidDt = $this->normalizePaidDt(
                 $row['PAIDDT'] ?? $row['paiddt'] ?? null,
                 (int) ($row['PAIDST'] ?? $row['paidst'] ?? 0)
             );
+
+            // Satu baris = satu tagihan (tanpa merge/jamak); kosong → "-"
+            $row['BTA'] = $this->dashEmpty($row['BTA'] ?? $row['bta'] ?? null);
+            $row['NOCUST'] = $this->dashEmpty($row['NOCUST'] ?? $row['nocust'] ?? null);
+            $row['NUM2ND'] = $this->dashEmpty($row['NUM2ND'] ?? $row['num2nd'] ?? null);
+            $row['NMCUST'] = $this->dashEmpty($row['NMCUST'] ?? $row['nmcust'] ?? null);
+            $row['BILLNM'] = $this->dashEmpty($row['BILLNM'] ?? $row['billnm'] ?? null);
+            $row['PAIDDT'] = $paidDt
+                ? Carbon::parse($paidDt)->locale('id')->translatedFormat('l, j F Y H:i')
+                : '-';
 
             return $row;
         })->values()->all();
@@ -303,6 +313,16 @@ class CekPelunasanController extends Controller
             "data" => $data,
         ];
         return response()->json($response);
+    }
+
+    private function dashEmpty(mixed $value): string
+    {
+        if ($value === null || $value === false) {
+            return '-';
+        }
+        $str = trim((string) $value);
+
+        return ($str === '' || $str === '-') ? '-' : $str;
     }
 
     /**
