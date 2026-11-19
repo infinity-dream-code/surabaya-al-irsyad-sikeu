@@ -288,19 +288,10 @@ class CekPelunasanController extends Controller
                 ? $item->toArray()
                 : (array) $item;
 
-            $paidDt = $row['PAIDDT'] ?? $row['paiddt'] ?? null;
-            $paidSt = (int) ($row['PAIDST'] ?? $row['paidst'] ?? 0);
-            if (
-                $paidSt !== 1
-                || $paidDt === null
-                || $paidDt === ''
-                || $paidDt === '0000-00-00'
-                || $paidDt === '0000-00-00 00:00:00'
-                || $paidDt === '1970-01-01 00:00:00'
-                || $paidDt === '1970-01-01 07:00:00'
-            ) {
-                $row['PAIDDT'] = null;
-            }
+            $row['PAIDDT'] = $this->normalizePaidDt(
+                $row['PAIDDT'] ?? $row['paiddt'] ?? null,
+                (int) ($row['PAIDST'] ?? $row['paidst'] ?? 0)
+            );
 
             return $row;
         })->values()->all();
@@ -312,6 +303,39 @@ class CekPelunasanController extends Controller
             "data" => $data,
         ];
         return response()->json($response);
+    }
+
+    /**
+     * PAIDDT kosong/0/0000-00-00 jangan sampai jadi 1 Jan 1970 di frontend.
+     */
+    private function normalizePaidDt(mixed $paidDt, int $paidSt): ?string
+    {
+        if ($paidSt !== 1 || $paidDt === null || $paidDt === '' || $paidDt === 0 || $paidDt === '0') {
+            return null;
+        }
+
+        if ($paidDt instanceof \DateTimeInterface) {
+            $ts = $paidDt->getTimestamp();
+            return $ts > 0 && (int) $paidDt->format('Y') >= 1980
+                ? $paidDt->format('Y-m-d H:i:s')
+                : null;
+        }
+
+        $raw = trim((string) $paidDt);
+        if (
+            $raw === ''
+            || str_starts_with($raw, '0000-00-00')
+            || str_starts_with($raw, '1970-01-01')
+        ) {
+            return null;
+        }
+
+        $ts = strtotime($raw);
+        if ($ts === false || $ts <= 0 || (int) date('Y', $ts) < 1980) {
+            return null;
+        }
+
+        return date('Y-m-d H:i:s', $ts);
     }
 
 }

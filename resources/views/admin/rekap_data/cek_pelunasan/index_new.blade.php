@@ -211,7 +211,7 @@
 @section('script')
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{asset('main/libs/datatables-bs5/datatables-bootstrap5.js')}}"></script>
-    <script src="{{asset('js/datatableCustom/Datatable-0-4.min.js')}}"></script>
+    <script src="{{ asset('js/datatableCustom/Datatable-0-4.js') }}?v={{ filemtime(public_path('js/datatableCustom/Datatable-0-4.js')) }}"></script>
 
     <script>
         const select2 = $(`[data-control='select2']`);
