@@ -303,7 +303,8 @@ class BuatTagihanController extends Controller
             return response()->json(['message' => 'Jumlah tagihan yang dipilih tidak sesuai dengan jumlah data, silahkan muat ulang halaman!'], 422);
         }
 
-        // BILLNM = "BULAN MEI" (bukan "SPP Mei"). Detail akun tetap di scctbill_detail.
+        // BILLNM = Nama Tagihan (+ bulan), mis. "SPP Mei"
+        // Detail akun (mis. "Testing") tetap di scctbill_detail.KodePost
         $bulanKode = $request->input('bulan') ?: substr((string) $request->fungsi, 4, 2);
         $baseNama = $this->resolveBillNmBase($request);
         $billNm = BillNamaHelper::compose($baseNama, $bulanKode);
@@ -419,7 +420,7 @@ class BuatTagihanController extends Controller
     }
 
     /**
-     * Base BILLNM: pakai Nama Tagihan. Jika yang dipilih nama akun detail / SPP → BULAN.
+     * Base BILLNM: pakai Nama Tagihan. Jika yang dipilih ternyata nama akun detail → pakai SPP.
      */
     private function resolveBillNmBase(Request $request): string
     {
@@ -432,14 +433,9 @@ class BuatTagihanController extends Controller
             ->all();
 
         if ($nama !== '' && !in_array(mb_strtoupper($nama), $detailNames, true)) {
-            $resolved = u_akun::where('NamaAkun', $nama)->value('NamaAkun') ?? $nama;
-            if (mb_strtoupper(trim((string) $resolved)) === 'SPP') {
-                return 'BULAN';
-            }
-
-            return $resolved;
+            return u_akun::where('NamaAkun', $nama)->value('NamaAkun') ?? $nama;
         }
 
-        return 'BULAN';
+        return 'SPP';
     }
 }

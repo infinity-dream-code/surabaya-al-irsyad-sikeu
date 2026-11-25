@@ -198,8 +198,8 @@ class UploadTagihanExcelController extends Controller
         $tagihan = mst_tagihan::where('urut', $request->tagihan)->first();
         if (!$tagihan) return response()->json(['message' => 'Tagihan tidak ditemukan, silahkan muat ulang halaman!'], 422);
 
-        // Sama seperti Buat Tagihan: "BULAN MEI", bukan "SPP Mei"
-        $billNm = BillNamaHelper::compose((string) ($tagihan->tagihan ?? 'BULAN'), $bulan);
+        // Sama seperti Buat Tagihan: mis. "SPP Mei"
+        $billNm = BillNamaHelper::compose((string) ($tagihan->tagihan ?? 'SPP'), $bulan);
         if ($billNm === '') {
             return response()->json(['message' => 'Nama tagihan tidak valid'], 422);
         }
