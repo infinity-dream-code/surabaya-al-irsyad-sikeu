@@ -273,7 +273,7 @@
             </div>
         </div>
     </form>
-    '
+
     <link rel="stylesheet" href="{{asset('libs/filepond/dist/filepond.min.css')}}">
     <link rel="stylesheet" href="{{asset('libs/filepond/dist/custom.css')}}">
     <script

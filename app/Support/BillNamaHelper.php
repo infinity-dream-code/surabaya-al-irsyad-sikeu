@@ -42,7 +42,8 @@ class BillNamaHelper
     }
 
     /**
-     * Susun BILLNM: "SPP" + bulan → "SPP November". Tidak dobel jika bulan sudah ada di nama.
+     * Susun BILLNM bulanan: "BULAN MEI" (bukan "SPP Mei").
+     * Jika nama sudah mengandung bulan, dikembalikan apa adanya (dinormalisasi spasi).
      */
     public static function compose(string $namaTagihan, ?string $bulanKode): string
     {
@@ -58,6 +59,12 @@ class BillNamaHelper
 
         if (self::containsBulan($nama)) {
             return $nama;
+        }
+
+        $base = mb_strtoupper($nama);
+        // SPP / kosong bermakna tagihan bulanan → pakai prefix BULAN
+        if ($base === 'SPP' || $base === 'BULAN') {
+            return 'BULAN ' . mb_strtoupper($bulanNama);
         }
 
         return trim($nama . ' ' . $bulanNama);

@@ -13,6 +13,7 @@ use App\Models\scctbill;
 use App\Models\scctbill_detail;
 use App\Models\scctcust;
 use App\Models\ValidationMessage;
+use App\Support\BillNamaHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +51,7 @@ class UploadTagihanExcelController extends Controller
             ['data' => 'name', 'name' => 'NAMA', 'searchable' => true, 'orderable' => true],
             ['data' => 'status', 'name' => 'Status', 'searchable' => true, 'orderable' => true, 'columnType' => 'importstatus'],
             ['data' => 'keterangan', 'name' => 'Keterangan', 'searchable' => true, 'orderable' => true],
-            ['data' => 'kelas', 'name' => 'Sekolah', 'searchable' => true, 'orderable' => true],
+            ['data' => 'sekolah', 'name' => 'Sekolah', 'searchable' => true, 'orderable' => true],
             ['data' => 'kelas', 'name' => 'Kelas', 'searchable' => true, 'orderable' => true],
             ['data' => 'kelompok', 'name' => 'Kelompok', 'searchable' => true, 'orderable' => true],
             ['data' => 'nominal', 'name' => 'Nominal', 'searchable' => true, 'orderable' => true, 'columnType' => 'currency'],
@@ -59,77 +60,73 @@ class UploadTagihanExcelController extends Controller
 
     public function getData(Request $request)
     {
-        $draw = $request->get('draw');
-        $start = $request->get('start');
-        $rowperpage = $request->get('length');
-
-        $columnName_arr = $request->get('columns');
-        $search_arr = $request->get('search');
-
-        $defaultColumn = 'scctcust.nocust';
-        $defaultOrder = 'asc';
-
-        if ($request->has('order')) {
-            $columnIndex_arr = $request->get('order');
-            $columnIndex = $columnIndex_arr[0]['column'];
-            $columnSortOrder = $columnIndex_arr[0]['dir'];
-        } else {
-            $columnIndex = $defaultColumn;
-            $columnSortOrder = $defaultOrder;
+        $draw = (int) $request->get('draw', 1);
+        $start = max(0, (int) $request->get('start', 0));
+        $rowperpage = (int) $request->get('length', 10);
+        if ($rowperpage < 1) {
+            $rowperpage = 10;
         }
 
-        $columnName = $columnName_arr[$columnIndex]['data'];
-        $searchValue = $search_arr['value'];
+        $searchValue = trim((string) data_get($request->get('search'), 'value', ''));
+        $cachedData = collect(Cache::get($this->cacheKey, []));
 
-        if (!$columnName || $columnName == 'no') {
-            $columnName = $defaultColumn;
-            $columnSortOrder = $defaultOrder;
+        if ($searchValue !== '') {
+            $cachedData = $cachedData->filter(function ($item) use ($searchValue) {
+                $nis = (string) ($item['nis'] ?? '');
+                $ket = (string) ($item['keterangan'] ?? '');
+                return str_contains($nis, $searchValue) || str_contains(strtolower($ket), strtolower($searchValue));
+            })->values();
         }
 
-        $filters = [];
-        $filterQuery = null;
+        $total = $cachedData->count();
+        $page = $cachedData->slice($start, $rowperpage)->values();
 
-        $cachedData = Cache::get($this->cacheKey, []);
-
-        $nisList = collect($cachedData)->pluck('nis')->toArray();
-        $nisCount = count($cachedData);
-
-
-        $whereAny = [
+        $select = [
             'scctcust.NMCUST',
             'scctcust.NOCUST',
-        ];
-
-        $select = array_unique(array_merge($whereAny, [
             'scctcust.NUM2ND',
             'scctcust.CODE02',
             'scctcust.DESC02',
             'scctcust.DESC03',
             'scctcust.DESC04',
-        ]));
+        ];
 
-        $records = collect($cachedData)->map(function ($item) use ($select){
-            $nis = $item['nis'];
-            $siswa = scctcust::select($select)->where('scctcust.NOCUST', $nis)->first();
+        $nisList = $page->pluck('nis')->filter()->unique()->values()->all();
+        $siswaMap = collect();
+        if (!empty($nisList)) {
+            try {
+                $siswaMap = scctcust::select($select)
+                    ->whereIn('scctcust.NOCUST', $nisList)
+                    ->get()
+                    ->keyBy(fn ($s) => (string) $s->NOCUST);
+            } catch (\Throwable $e) {
+                \Log::warning('upload-tagihan-excel.get-data.siswa', ['error' => $e->getMessage()]);
+            }
+        }
+
+        $records = $page->map(function ($item) use ($siswaMap) {
+            $nis = (string) ($item['nis'] ?? '');
+            $siswa = $siswaMap->get($nis);
+
             return [
                 'nis' => $nis,
                 'name' => $siswa->NMCUST ?? null,
                 'ortu' => $item['ayah'] ?? null,
+                'sekolah' => $siswa->CODE02 ?? null,
                 'kelas' => $siswa->DESC02 ?? null,
                 'kelompok' => $siswa->DESC03 ?? null,
                 'nominal' => $item['nominal'] ?? null,
                 'status' => $item['status'] ?? 0,
-                'keterangan' => $item['keterangan'],
+                'keterangan' => $item['keterangan'] ?? null,
             ];
-        });
+        })->all();
 
-        $response = array(
-            'draw' => intval($draw),
-            'recordsTotal' => $nisCount,
-            'recordsFiltered' => $nisCount,
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $total,
+            'recordsFiltered' => $total,
             'data' => $records,
-        );
-        return response()->json($response);
+        ]);
     }
 
 
@@ -201,6 +198,12 @@ class UploadTagihanExcelController extends Controller
         $tagihan = mst_tagihan::where('urut', $request->tagihan)->first();
         if (!$tagihan) return response()->json(['message' => 'Tagihan tidak ditemukan, silahkan muat ulang halaman!'], 422);
 
+        // Sama seperti Buat Tagihan: "BULAN MEI", bukan "SPP Mei"
+        $billNm = BillNamaHelper::compose((string) ($tagihan->tagihan ?? 'BULAN'), $bulan);
+        if ($billNm === '') {
+            return response()->json(['message' => 'Nama tagihan tidak valid'], 422);
+        }
+
         $postCodes = array_values(array_unique(array_filter((array) $request->post)));
         $posts = u_akun::whereIn('KodeAkun', $postCodes)->get();
         if ($posts->count() !== count($postCodes)) {
@@ -225,7 +228,7 @@ class UploadTagihanExcelController extends Controller
                 $bill = scctbill::create([
                     'CUSTID' => $siswa->CUSTID,
                     'BILLAC' => $tahun . $bulan,
-                    'BILLNM' => $tagihan->tagihan,
+                    'BILLNM' => $billNm,
                     'BILLAM' => $totalNominal,
                     'PAIDST' => 0,
                     'FUrutan' => $urut,

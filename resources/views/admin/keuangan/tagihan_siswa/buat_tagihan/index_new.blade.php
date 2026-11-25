@@ -585,11 +585,11 @@
                 e.preventDefault();
 
                 if (!$('#nama_tagihan').val()) {
-                    errorAlert('Nama Tagihan wajib dipilih (contoh: SPP). Detail akun dipilih di tabel bawah.');
+                    errorAlert('Nama Tagihan wajib dipilih. Detail akun dipilih di tabel bawah.');
                     return;
                 }
                 if (!$('#bulan').val() || !$('#fungsi').val()) {
-                    errorAlert('Bulan wajib dipilih agar Nama Tagihan tersusun (contoh: SPP November).');
+                    errorAlert('Bulan wajib dipilih agar Nama Tagihan tersusun (contoh: BULAN MEI).');
                     return;
                 }
 
