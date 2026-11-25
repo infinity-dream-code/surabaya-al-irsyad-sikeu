@@ -2,9 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\scctbill;
-use Illuminate\Support\Collection;
-
 class BillNamaHelper
 {
     public static function bulanMap(): array
@@ -64,85 +61,5 @@ class BillNamaHelper
         }
 
         return trim($nama . ' ' . $bulanNama);
-    }
-
-    /**
-     * Opsi filter Nama Tagihan = BILLNM aktual di scctbill (mirip exact-match intra).
-     * Return collection of objects with ->tagihan for existing blade compatibility.
-     */
-    public static function filterOptions(?string $sekolah = null): Collection
-    {
-        $query = scctbill::query()
-            ->when($sekolah, function ($q) use ($sekolah) {
-                $q->whereExists(function ($sub) use ($sekolah) {
-                    $sub->selectRaw('1')
-                        ->from('scctcust')
-                        ->whereColumn('scctcust.CUSTID', 'scctbill.CUSTID')
-                        ->where(function ($w) use ($sekolah) {
-                            $w->where('scctcust.CODE02', $sekolah)
-                                ->orWhere('scctcust.CODE02', 'like', '%' . $sekolah . '%');
-                        });
-                });
-            })
-            ->whereNotNull('BILLNM')
-            ->where('BILLNM', '!=', '')
-            ->select('BILLNM')
-            ->distinct()
-            ->orderBy('BILLNM');
-
-        return $query->pluck('BILLNM')
-            ->filter(fn ($v) => trim((string) $v) !== '')
-            ->unique()
-            ->values()
-            ->map(fn ($billnm) => (object) ['tagihan' => (string) $billnm]);
-    }
-
-    /**
-     * Perluas pilihan filter master (mis. "SPP") ke varian BILLNM yang mungkin tersimpan
-     * (mis. "SPP Mei", "BULAN MEI") agar query IN tetap kena.
-     */
-    public static function expandFilterNames(array $selected): array
-    {
-        $out = [];
-        foreach ($selected as $raw) {
-            $name = trim((string) $raw);
-            if ($name === '' || strtolower($name) === 'all') {
-                continue;
-            }
-            $out[] = $name;
-
-            if (self::containsBulan($name)) {
-                // BULAN MEI ↔ SPP Mei
-                $upper = mb_strtoupper($name);
-                foreach (self::bulanMap() as $kode => $label) {
-                    $labelUpper = mb_strtoupper($label);
-                    if (!str_contains($upper, $labelUpper)) {
-                        continue;
-                    }
-                    $out[] = self::compose('SPP', $kode);
-                    $out[] = 'BULAN ' . $labelUpper;
-                    $out[] = 'BULAN ' . $label;
-                    $out[] = 'SPP ' . $label;
-                    $out[] = 'SPP ' . $labelUpper;
-                }
-                continue;
-            }
-
-            foreach (array_keys(self::bulanMap()) as $kode) {
-                $composed = self::compose($name, $kode);
-                if ($composed !== '') {
-                    $out[] = $composed;
-                }
-            }
-
-            if (mb_strtoupper($name) === 'SPP') {
-                foreach (self::bulanMap() as $label) {
-                    $out[] = 'BULAN ' . mb_strtoupper($label);
-                    $out[] = 'BULAN ' . $label;
-                }
-            }
-        }
-
-        return array_values(array_unique(array_filter($out, fn ($v) => trim((string) $v) !== '')));
     }
 }
