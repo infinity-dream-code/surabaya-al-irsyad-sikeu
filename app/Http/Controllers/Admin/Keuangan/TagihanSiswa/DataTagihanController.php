@@ -197,7 +197,8 @@ class DataTagihanController extends Controller
         $data['dataTitle'] = $this->dataTitle;
         $data['columnsUrl'] = $this->columnsUrl();
         $data['datasUrl'] = $this->datasUrl();
-        $data['post'] = mst_tagihan::select(['tagihan'])->get();
+        // Filter menyesuaikan BILLNM aktual (mis. SPP Mei), bukan hanya label master
+        $data['post'] = BillNamaHelper::filterOptions($this->sekolah);
         $data['thn_aka'] = mst_thn_aka::select(['thn_aka'])
             ->where('thn_aka', '!=', null)
             ->orderBy('thn_aka', 'desc')->get();
@@ -425,7 +426,7 @@ class DataTagihanController extends Controller
             if (is_array($rawPosts)) {
                 $postValues = array_values(array_filter($rawPosts, fn($item) => !is_null($item) && $item !== '' && strtolower((string) $item) !== 'all'));
                 if (!empty($postValues)) {
-                    $filter['scctbill.BILLNM'] = $postValues;
+                    $filter['scctbill.BILLNM'] = BillNamaHelper::expandFilterNames($postValues);
                 }
             }
             if ($filter) {
@@ -450,12 +451,19 @@ class DataTagihanController extends Controller
                             break;
                         case 'scctbill.BILLNM':
                             if (is_array($val)) {
-                                $postValues = array_values(array_filter($val, fn($item) => !is_null($item) && $item !== '' && strtolower((string) $item) !== 'all'));
+                                $postValues = BillNamaHelper::expandFilterNames(
+                                    array_values(array_filter($val, fn($item) => !is_null($item) && $item !== '' && strtolower((string) $item) !== 'all'))
+                                );
                                 if (!empty($postValues)) {
                                     $filters[] = ['scctbill.BILLNM', 'in', $postValues];
                                 }
                             } else {
-                                ($key) && $filters[] = [$key, '=', $val];
+                                $expanded = BillNamaHelper::expandFilterNames([(string) $val]);
+                                if (count($expanded) > 1) {
+                                    $filters[] = ['scctbill.BILLNM', 'in', $expanded];
+                                } else {
+                                    ($key) && $filters[] = [$key, '=', $val];
+                                }
                             }
                             break;
                         case 'scctbill.BTA':
@@ -666,7 +674,7 @@ class DataTagihanController extends Controller
         if (is_array($rawPosts)) {
             $postValues = array_values(array_filter($rawPosts, fn($item) => !is_null($item) && $item !== '' && strtolower((string) $item) !== 'all'));
             if (!empty($postValues)) {
-                $filter['scctbill.BILLNM'] = $postValues;
+                $filter['scctbill.BILLNM'] = BillNamaHelper::expandFilterNames($postValues);
             }
         }
 
@@ -698,12 +706,19 @@ class DataTagihanController extends Controller
                         break;
                     case 'scctbill.BILLNM':
                         if (is_array($val)) {
-                            $postValues = array_values(array_filter($val, fn($item) => !is_null($item) && $item !== '' && strtolower((string) $item) !== 'all'));
+                            $postValues = BillNamaHelper::expandFilterNames(
+                                array_values(array_filter($val, fn($item) => !is_null($item) && $item !== '' && strtolower((string) $item) !== 'all'))
+                            );
                             if (!empty($postValues)) {
                                 $filters[] = ['scctbill.BILLNM', 'in', $postValues];
                             }
                         } else {
-                            ($key) && $filters[] = [$key, '=', $val];
+                            $expanded = BillNamaHelper::expandFilterNames([(string) $val]);
+                            if (count($expanded) > 1) {
+                                $filters[] = ['scctbill.BILLNM', 'in', $expanded];
+                            } else {
+                                ($key) && $filters[] = [$key, '=', $val];
+                            }
                         }
                         break;
                     case 'scctbill.BTA':

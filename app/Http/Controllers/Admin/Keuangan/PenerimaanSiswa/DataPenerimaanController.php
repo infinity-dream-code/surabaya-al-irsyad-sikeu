@@ -65,7 +65,8 @@ class DataPenerimaanController extends Controller
         $data['title'] = $this->title;
         $data['columnsUrl'] = $this->columnsUrl();
         $data['datasUrl'] = $this->datasUrl();
-        $data['post'] = mst_tagihan::select(['tagihan'])->get();
+        // Filter menyesuaikan BILLNM aktual (mis. SPP Mei), selaras exact-match intra
+        $data['post'] = \App\Support\BillNamaHelper::filterOptions($this->sekolah);
         $data['thn_aka'] = mst_thn_aka::getMstThnAkaAttributes();
         $data['kelas'] = mst_kelas::getMstKelasAttributes();
         $data['tanda_tangan'] = User::getTandaTanganBase64();
@@ -202,8 +203,19 @@ class DataPenerimaanController extends Controller
                             $filters[] = ['scctcust.NMCUST', 'like', '%' . $raw . '%'];
                         }
                         break;
+                    case 'scctbill.BILLNM':
+                        $names = is_array($val) ? $val : [(string) $val];
+                        $names = \App\Support\BillNamaHelper::expandFilterNames($names);
+                        if (!empty($names)) {
+                            $filters[] = ['scctbill.BILLNM', 'in', $names];
+                        }
+                        break;
                     default:
-                        ($key) && $filters[] = [$key, '=', $val];
+                        if (is_array($val)) {
+                            ($key) && $filters[] = [$key, 'in', $val];
+                        } else {
+                            ($key) && $filters[] = [$key, '=', $val];
+                        }
                         break;
                 }
             };
@@ -212,7 +224,11 @@ class DataPenerimaanController extends Controller
                 $filterQuery = function ($query) use ($filters) {
                     foreach ($filters as $filter) {
                         if (count($filter) === 3) {
-                            $query->where($filter[0], $filter[1], $filter[2]);
+                            if (($filter[1] ?? null) === 'in' && is_array($filter[2] ?? null)) {
+                                $query->whereIn($filter[0], $filter[2]);
+                            } else {
+                                $query->where($filter[0], $filter[1], $filter[2]);
+                            }
                         } elseif (count($filter) === 4) {
                             if ($filter[3] == 'whereBetween') {
                                 $query->whereBetween($filter[0], [$filter[1], $filter[2]]);
@@ -612,14 +628,21 @@ class DataPenerimaanController extends Controller
                 ->when(!blank($filter['post'] ?? null), function ($q) use ($filter) {
                     $post = $filter['post'];
                     if (is_array($post)) {
-                        $post = collect($post)->filter(fn($item) => !blank($item) && strtolower((string)$item) !== 'all')->values()->all();
+                        $post = \App\Support\BillNamaHelper::expandFilterNames(
+                            collect($post)->filter(fn($item) => !blank($item) && strtolower((string)$item) !== 'all')->values()->all()
+                        );
                         if (!empty($post)) {
                             $q->whereIn('b.BILLNM', $post);
                         }
                         return;
                     }
                     if (strtolower((string)$post) !== 'all') {
-                        $q->where('b.BILLNM', trim((string)$post));
+                        $expanded = \App\Support\BillNamaHelper::expandFilterNames([trim((string)$post)]);
+                        if (count($expanded) > 1) {
+                            $q->whereIn('b.BILLNM', $expanded);
+                        } else {
+                            $q->where('b.BILLNM', trim((string)$post));
+                        }
                     }
                 })
                 ->when($this->sekolah, function ($q) {
@@ -728,14 +751,21 @@ class DataPenerimaanController extends Controller
             ->when(!blank($request->input('filter.post')), function ($q) use ($request) {
                 $post = $request->input('filter.post');
                 if (is_array($post)) {
-                    $post = collect($post)->filter(fn($item) => !blank($item) && strtolower((string)$item) !== 'all')->values()->all();
+                    $post = \App\Support\BillNamaHelper::expandFilterNames(
+                        collect($post)->filter(fn($item) => !blank($item) && strtolower((string)$item) !== 'all')->values()->all()
+                    );
                     if (!empty($post)) {
                         $q->whereIn('scctbill.BILLNM', $post);
                     }
                     return;
                 }
                 if (strtolower((string)$post) !== 'all') {
-                    $q->where('scctbill.BILLNM', $post);
+                    $expanded = \App\Support\BillNamaHelper::expandFilterNames([(string) $post]);
+                    if (count($expanded) > 1) {
+                        $q->whereIn('scctbill.BILLNM', $expanded);
+                    } else {
+                        $q->where('scctbill.BILLNM', $post);
+                    }
                 }
             })
             ->when(!blank($request->input('filter.bank')) && strtolower((string)$request->input('filter.bank')) !== 'all', function ($q) use ($request) {

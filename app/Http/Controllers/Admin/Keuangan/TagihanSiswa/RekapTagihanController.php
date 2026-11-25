@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin\Keuangan\TagihanSiswa;
 
 use App\Http\Controllers\Controller;
+use App\Support\BillNamaHelper;
 use App\Support\PerNisMatrixPdf;
 use App\Models\mst_kelas;
 use App\Models\mst_sekolah;
@@ -135,7 +136,8 @@ class RekapTagihanController extends Controller
             })
             ->orderByRaw("CASE WHEN kelas REGEXP '^[0-9]+$' THEN 0 ELSE 1 END, kelas")
             ->get();
-        $data['tagihan'] = mst_tagihan::orderBy('urut', 'asc')->get();
+        // Filter = BILLNM aktual di DB (mis. SPP Mei), selaras exact-match intra
+        $data['tagihan'] = BillNamaHelper::filterOptions($this->sekolah);
         $data['akun'] = u_akun::orderBy('KodeAkun', 'asc')->get();
 
         return view('admin.keuangan.tagihan_siswa.rekap_tagihan.index_new', $data);
@@ -390,13 +392,16 @@ class RekapTagihanController extends Controller
                             $operator = $key === 'periode_mulai' ? '>=' : '<=';
                             $filters[] = [$colName, $operator, (string) $val];
                         }
-                    } elseif (is_array($val)) {
-                        ($colName) && $filters[] = [$colName, 'in', $val];
-                    } elseif ($key === 'nama_tagihan') {
-                        $namaTagihans = array_values(array_filter(array_map('trim', explode(',', (string) $val))));
+                    } elseif ($key === 'nama_tagihan' || ($colName === 'scctbill.BILLNM' && is_array($val))) {
+                        $namaTagihans = is_array($val)
+                            ? array_values(array_filter($val, fn ($item) => !is_null($item) && $item !== '' && strtolower((string) $item) !== 'all'))
+                            : array_values(array_filter(array_map('trim', explode(',', (string) $val))));
+                        $namaTagihans = BillNamaHelper::expandFilterNames($namaTagihans);
                         if (!empty($namaTagihans) && $colName) {
                             $filters[] = [$colName, 'in', $namaTagihans];
                         }
+                    } elseif (is_array($val)) {
+                        ($colName) && $filters[] = [$colName, 'in', $val];
                     } elseif ($key === 'tahun_pelajaran' && $colName) {
                         $normalizedVal = str_replace([' ', '-'], ['', '/'], trim((string) $val));
                         $filters[] = [
